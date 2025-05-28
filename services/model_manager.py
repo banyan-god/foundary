@@ -137,6 +137,8 @@ def batch_predict(request: BatchInferenceRequest) -> BatchInferenceResponse:
 
 def train(request: TrainRequest) -> TrainResponse:
     global model, tokenizer, label2idx, idx2label, model_version
+    # Always (re)load model and tokenizer to ensure fresh state
+    load_all()
     with model_lock:
         new_labels = set(request.labels)
         if not label2idx:
@@ -157,18 +159,26 @@ def train(request: TrainRequest) -> TrainResponse:
         model.train()
         optimizer = optim.Adam(model.parameters())
         criterion = nn.CrossEntropyLoss()
-        logits = model(input_ids)
-        loss = criterion(logits, labels_idx)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        preds = torch.argmax(logits, dim=-1)
+        # Train for multiple epochs to fit small dataset
+        epochs = 5
+        for _ in range(epochs):
+            logits = model(input_ids)
+            loss = criterion(logits, labels_idx)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        # Evaluate
+        with torch.no_grad():
+            logits = model(input_ids)
+            preds = torch.argmax(logits, dim=-1)
         accuracy = (preds == labels_idx).float().mean().item()
         model_version += 1
         save_all()
         return TrainResponse(status="training_complete", loss=loss.item(), accuracy=accuracy)
 
 def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
+    # Always (re)load model and tokenizer before online learning
+    load_all()
     with model_lock:
         text = prepare_input_json(request.input.dict())
         tokenizer.grow_vocab([text])
