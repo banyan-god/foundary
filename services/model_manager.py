@@ -18,7 +18,14 @@ from schemas.transaction import (
 
 # Thread-safe model management
 model_lock = threading.Lock()
-device = torch.device("cuda" if (Config.USE_CUDA and torch.cuda.is_available()) else "cpu")
+# Select best available device: CUDA > MPS (macOS) > CPU
+_use_cuda = Config.USE_CUDA and torch.cuda.is_available()
+_use_mps = False
+try:
+    _use_mps = torch.backends.mps.is_available() and torch.backends.mps.is_built()
+except Exception:
+    _use_mps = False
+device = torch.device("cuda" if _use_cuda else "mps" if _use_mps else "cpu")
 model = None
 tokenizer = None
 label2idx = {}
