@@ -87,4 +87,7 @@ venv.bak/
 *.swp
 *.DS_Store
 Thumbs.db
+# Model artifacts and vocab files
+labels.json
+tokenizer.json
 *.pt
