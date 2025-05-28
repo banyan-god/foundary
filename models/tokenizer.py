@@ -1,8 +1,5 @@
-
-import torch.nn as nn
-import json
 import re
-
+import json
 
 class SimpleTokenizer:
     def __init__(self, vocab=None):
@@ -48,20 +45,20 @@ class SimpleTokenizer:
 
     def encode(self, text, max_length=128):
         tokens = [self.cls_token] + self.tokenize(text)[:max_length-2] + [self.sep_token]
-        ids = [self.vocab.get(token, self.vocab[self.unk_token]) for token in tokens]
+        ids = [self.vocab.get(token, self.vocab.get(self.unk_token, 0)) for token in tokens]
         if len(ids) < max_length:
-            ids += [self.vocab[self.pad_token]] * (max_length - len(ids))
+            ids += [self.vocab.get(self.pad_token, 0)] * (max_length - len(ids))
         return ids
 
     def decode(self, ids):
         return ' '.join([self.inv_vocab.get(i, self.unk_token) for i in ids])
 
     def save(self, path):
-        with open(path, "w") as f:
+        with open(path, 'w') as f:
             json.dump(self.vocab, f)
 
     @classmethod
     def load(cls, path):
-        with open(path, "r") as f:
+        with open(path, 'r') as f:
             vocab = json.load(f)
         return cls(vocab)

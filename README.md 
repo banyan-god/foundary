@@ -1,0 +1,180 @@
+
+Transaction Classifier Microservice
+
+A robust, production-ready microservice for text-based classification tasks (e.g., transaction categorization) with online/batch training, batch inference, monitoring, and extensibility.
+Features
+
+    FastAPI HTTP API with OpenAPI docs
+
+    Thread-safe training and inference
+
+    Batch and online learning endpoints
+
+    Batch inference endpoint
+
+    Dynamic label set and growing tokenizer
+
+    Model versioning and persistence
+
+    Custom error handling and input validation
+
+    Training metrics (loss, accuracy)
+
+    Data drift monitoring (simple input stats)
+
+    Optional API key security
+
+    Graceful shutdown with signal handling
+
+    Resource management (batch size, timeouts)
+
+    Comprehensive tests
+
+    Docker-ready
+
+Quickstart
+1. Build and Run
+
+docker build -t transaction-classifier .
+docker run -p 8000:8000 transaction-classifier
+
+Or run locally:
+
+pip install -r requirements.txt
+uvicorn main:app --reload
+
+2. API Documentation
+
+Visit http://localhost:8000/docs for interactive API docs.
+API Endpoints
+Health Check
+
+GET /health
+
+Single Prediction
+
+POST /predict
+
+Request:
+
+{
+  "current_transaction": {
+    "description": "Starbucks coffee",
+    "name": "SBX",
+    "merchant": "Starbucks",
+    "amount": "4.50"
+  },
+  "user_history": []
+}
+
+Response:
+
+{
+  "predicted_category": "coffee",
+  "confidence": 0.98
+}
+
+Batch Prediction
+
+POST /batch_predict
+
+Request:
+
+{
+  "requests": [
+    {
+      "current_transaction": { ... },
+      "user_history": []
+    },
+    ...
+  ]
+}
+
+Response:
+
+{
+  "results": [
+    {"predicted_category": "coffee", "confidence": 0.98},
+    ...
+  ]
+}
+
+Batch Training
+
+POST /train
+
+Request:
+
+{
+  "data": [
+    {
+      "current_transaction": { ... },
+      "user_history": []
+    }
+  ],
+  "labels": ["coffee"]
+}
+
+Response:
+
+{
+  "status": "training_complete",
+  "loss": 0.123,
+  "accuracy": 1.0
+}
+
+Online Learning
+
+POST /online_learn
+
+Request:
+
+{
+  "input": {
+    "current_transaction": { ... },
+    "user_history": []
+  },
+  "label": "coffee"
+}
+
+Response:
+
+{
+  "status": "online_learning_complete",
+  "loss": 0.05
+}
+
+Configuration
+
+Set environment variables or edit config.py:
+
+    MODEL_DIR: Directory for model files (default: ./models)
+
+    TOKENIZER_PATH: Path for tokenizer (default: ./tokenizer.json)
+
+    LABELS_PATH: Path for label mapping (default: ./labels.json)
+
+    API_KEY: (Optional) Set to require API key in requests
+
+    MAX_BATCH_SIZE: Max batch size for batch inference (default: 32)
+
+    REQUEST_TIMEOUT: Request timeout in seconds (default: 30)
+
+Testing
+
+pytest test_main.py
+
+Graceful Shutdown
+
+The service saves model, tokenizer, and labels on SIGTERM/SIGINT (e.g., Docker stop, Ctrl+C).
+Extending
+
+    Change input schema in schemas.py for new data types.
+
+    Swap model in model.py for more advanced architectures.
+
+    Add metrics, monitoring, or hooks as needed.
+
+License
+
+MIT

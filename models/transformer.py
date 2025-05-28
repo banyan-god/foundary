@@ -1,9 +1,5 @@
 import torch
 import torch.nn as nn
-import json
-import re
-import os
-
 
 class VanillaTransformerClassifier(nn.Module):
     def __init__(self, vocab_size, d_model=128, nhead=4, num_layers=2, num_classes=10, max_length=128):
@@ -15,9 +11,9 @@ class VanillaTransformerClassifier(nn.Module):
         self.max_length = max_length
 
     def forward(self, input_ids):
-        x = self.embedding(input_ids)  # (batch, seq_len, d_model)
-        x = x.permute(1, 0, 2)  # (seq_len, batch, d_model)
-        x = self.transformer(x)  # (seq_len, batch, d_model)
-        cls_output = x[0]  # (batch, d_model)
-        logits = self.fc(cls_output)  # (batch, num_classes)
+        x = self.embedding(input_ids)
+        x = x.permute(1, 0, 2)
+        x = self.transformer(x)
+        cls_output = x[0]
+        logits = self.fc(cls_output)
         return logits
