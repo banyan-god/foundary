@@ -87,3 +87,4 @@ venv.bak/
 *.swp
 *.DS_Store
 Thumbs.db
+*.pt
