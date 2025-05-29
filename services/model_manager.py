@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from config import Config
-from models.transformer_ar import VanillaTransformerAR
+from models.transformer_ar import VanillaTransformerDecoderAR
 from models.tokenizer import SPTokenizer
 from schemas.transaction import (
     InferenceRequest, InferenceResponse,
@@ -74,8 +74,10 @@ def load_all():
     tokenizer = SPTokenizer(sp_model)
     # init or load AR model
     vocab_size = tokenizer.sp.get_piece_size()
-    model = VanillaTransformerAR(vocab_size=vocab_size,
-                                max_length=Config.AR_MAX_GENERATE_LENGTH).to(device)
+    model = VanillaTransformerDecoderAR(
+        vocab_size=vocab_size,
+        max_length=Config.AR_MAX_GENERATE_LENGTH
+    ).to(device)
     model_file = get_model_path(1)
     if os.path.exists(model_file):
         try:
@@ -166,7 +168,7 @@ def train(request: TrainRequest) -> TrainResponse:
     input_tensor = torch.tensor(inp_batch, dtype=torch.long, device=device)
     target_tensor = torch.tensor(tgt_batch, dtype=torch.long, device=device)
     # forward
-    logits = model(input_tensor)
+    logits = model(input_tensor, memory=None)
     bsz, seq_len, vocab_size = logits.size()
     logits_flat = logits.view(-1, vocab_size)
     target_flat = target_tensor.view(-1)
@@ -203,7 +205,7 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     # tensor
     inp_tensor = torch.tensor([inp_ids], dtype=torch.long, device=device)
     tgt_tensor = torch.tensor([tgt_ids], dtype=torch.long, device=device)
-    logits = model(inp_tensor)
+    logits = model(inp_tensor, memory=None)
     vocab_size = logits.size(-1)
     logits_flat = logits.view(-1, vocab_size)
     target_flat = tgt_tensor.view(-1)
