@@ -10,3 +10,7 @@ class Config:
     API_KEY = os.getenv("API_KEY", None)
     MAX_BATCH_SIZE = int(os.getenv("MAX_BATCH_SIZE", "32"))
     REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))  # seconds
+    # SentencePiece settings
+    SP_MODEL_PREFIX = os.getenv("SP_MODEL_PREFIX", "./spm")
+    SP_VOCAB_SIZE = int(os.getenv("SP_VOCAB_SIZE", "500"))
+    SP_TRAIN_DATA = os.getenv("SP_TRAIN_DATA", "output.txt")  # CSV file path with 'text' column

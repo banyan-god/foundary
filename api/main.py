@@ -1,4 +1,9 @@
+import logging
+from config import Config
 from fastapi import FastAPI
+# Configure root logger
+level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
+logging.basicConfig(level=level)
 from api.health import router as health_router
 from api.inference import router as inference_router
 from api.training import router as training_router

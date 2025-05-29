@@ -1,16 +1,32 @@
+import csv
+import tempfile
+import pytest
 from fastapi.testclient import TestClient
-from api.main import app
+from config import Config
 
-client = TestClient(app)
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    # Prepare a minimal CSV for SentencePiece training without pandas
+    sp_csv = tmp_path / "sp_test.csv"
+    with open(sp_csv, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['text'])
+        writer.writerow(['Starbucks coffee at Starbucks'])
+        writer.writerow(['Uber ride across town'])
+    # Override SP settings
+    monkeypatch.setattr(Config, 'SP_TRAIN_DATA', str(sp_csv))
+    monkeypatch.setattr(Config, 'SP_MODEL_PREFIX', str(tmp_path / "spm_test"))
+    from api.main import app
+    return TestClient(app)
 
-def test_health():
+def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
     assert data.get("status") == "ok"
     assert "model_version" in data
 
-def test_predict():
+def test_predict(client):
     payload = {
         "current_transaction": {
             "description": "Starbucks coffee",
@@ -34,7 +50,7 @@ def test_predict():
     assert "predicted_category" in result
     assert "confidence" in result
 
-def test_batch_predict():
+def test_batch_predict(client):
     payload = {
         "requests": [
             {
@@ -63,7 +79,7 @@ def test_batch_predict():
     assert "results" in data
     assert len(data["results"]) == 2
 
-def test_train():
+def test_train(client):
     payload = {
         "data": [
             {
@@ -85,7 +101,7 @@ def test_train():
     assert "loss" in data
     assert "accuracy" in data
 
-def test_online_learn():
+def test_online_learn(client):
     payload = {
         "input": {
             "current_transaction": {
@@ -104,7 +120,7 @@ def test_online_learn():
     assert data.get("status") == "online_learning_complete"
     assert "loss" in data
 
-def test_invalid_amount():
+def test_invalid_amount(client):
     payload = {
         "current_transaction": {
             "description": "Invalid amount",
@@ -117,7 +133,7 @@ def test_invalid_amount():
     response = client.post("/predict", json=payload)
     assert response.status_code == 422
 
-def test_batch_size_limit():
+def test_batch_size_limit(client):
     payload = {
         "requests": [
             {

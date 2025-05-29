@@ -1,64 +1,24 @@
-import re
-import json
+import sentencepiece as spm
 
-class SimpleTokenizer:
-    def __init__(self, vocab=None):
-        self.vocab = vocab or {}
-        self.inv_vocab = {v: k for k, v in self.vocab.items()}
-        self.unk_token = '[UNK]'
-        self.cls_token = '[CLS]'
-        self.sep_token = '[SEP]'
-        self.pad_token = '[PAD]'
-        self.special_tokens = [self.unk_token, self.cls_token, self.sep_token, self.pad_token]
+class SPTokenizer:
+    """Wrapper around SentencePieceProcessor"""
+    def __init__(self, model_file: str):
+        self.sp = spm.SentencePieceProcessor()
+        self.sp.load(model_file)
 
-    def build_vocab(self, texts, min_freq=1):
-        from collections import Counter
-        counter = Counter()
-        for text in texts:
-            tokens = self.tokenize(text)
-            counter.update(tokens)
-        idx = 0
-        for token in self.special_tokens:
-            self.vocab[token] = idx
-            idx += 1
-        for token, freq in counter.items():
-            if freq >= min_freq and token not in self.vocab:
-                self.vocab[token] = idx
-                idx += 1
-        self.inv_vocab = {v: k for k, v in self.vocab.items()}
+    def encode(self, text: str):
+        return self.sp.encode(text, out_type=int)
 
-    def grow_vocab(self, texts, min_freq=1):
-        from collections import Counter
-        counter = Counter()
-        for text in texts:
-            tokens = self.tokenize(text)
-            counter.update(tokens)
-        idx = max(self.vocab.values(), default=-1) + 1
-        for token, freq in counter.items():
-            if freq >= min_freq and token not in self.vocab:
-                self.vocab[token] = idx
-                idx += 1
-        self.inv_vocab = {v: k for k, v in self.vocab.items()}
-
-    def tokenize(self, text):
-        return re.findall(r'\w+|\S', text.lower())
-
-    def encode(self, text, max_length=128):
-        tokens = [self.cls_token] + self.tokenize(text)[:max_length-2] + [self.sep_token]
-        ids = [self.vocab.get(token, self.vocab.get(self.unk_token, 0)) for token in tokens]
-        if len(ids) < max_length:
-            ids += [self.vocab.get(self.pad_token, 0)] * (max_length - len(ids))
-        return ids
-
-    def decode(self, ids):
-        return ' '.join([self.inv_vocab.get(i, self.unk_token) for i in ids])
-
-    def save(self, path):
-        with open(path, 'w') as f:
-            json.dump(self.vocab, f)
+    def save(self, path_prefix: str):
+        pass
 
     @classmethod
-    def load(cls, path):
-        with open(path, 'r') as f:
-            vocab = json.load(f)
-        return cls(vocab)
+    def train(cls, input_file: str, model_prefix: str, vocab_size: int = 1000):
+        spm.SentencePieceTrainer.Train(
+            input=input_file,
+            model_prefix=model_prefix,
+            vocab_size=vocab_size,
+            character_coverage=1.0,
+            model_type='unigram'
+        )
+        return cls(f"{model_prefix}.model")
