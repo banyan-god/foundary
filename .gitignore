@@ -2,15 +2,65 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 
-# Virtual environment
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# Virtual environments
 venv/
+.venv/
+ENV/
+env/
 
-# Output and data files
-output.txt
+# Environment files
+.env
+.env.*
+
+# Python cache
+*.pyo
+*.pyd
+
+# Testing and coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+htmlcov/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.sublime-*
+
+# Logs
+*.log
+logs/
+
+# Databases
+*.sqlite3
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+
+# Model artifacts and data
+models/*.pt
 spm.model
 spm.vocab
-models/*.pt
-
-# Mac OS metadata
-.DS_Store
+data/
+output.txt
+labels.json
+tokenizer.json
