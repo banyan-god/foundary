@@ -1,8 +1,9 @@
 from fastapi import APIRouter
-from services.model_manager import model_version
+import services.model_manager as mgr
 
 router = APIRouter(tags=["Utility"])
 
 @router.get("/health")
 def health():
-    return {"status": "ok", "model_version": model_version}
+    # Return dynamic model version from model_manager
+    return {"status": "ok", "model_version": mgr.model_version}
