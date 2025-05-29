@@ -44,7 +44,6 @@ def save_all():
     if model is None or tokenizer is None:
         return
     torch.save(model.state_dict(), get_model_path(model_version))
-    tokenizer.save(Config.TOKENIZER_PATH)
     with open(Config.LABELS_PATH, 'w') as f:
         json.dump(label2idx, f)
     logger.info("Model, tokenizer, and labels saved.")

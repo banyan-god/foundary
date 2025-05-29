@@ -11,11 +11,9 @@ from api.main import app
 def clean_model_env(tmp_path, monkeypatch):
     # Redirect model, tokenizer, and labels paths to temp directory
     tmp_models = tmp_path / "models"
-    tmp_tokenizer = tmp_path / "tokenizer.json"
     tmp_labels = tmp_path / "labels.json"
     # Patch Config
     Config.MODEL_DIR = str(tmp_models)
-    Config.TOKENIZER_PATH = str(tmp_tokenizer)
     Config.LABELS_PATH = str(tmp_labels)
     # Clean mgr state
     mgr.model = None
@@ -26,16 +24,12 @@ def clean_model_env(tmp_path, monkeypatch):
     # Ensure no leftovers
     if tmp_models.exists():
         shutil.rmtree(tmp_models)
-    if tmp_tokenizer.exists():
-        tmp_tokenizer.unlink()
     if tmp_labels.exists():
         tmp_labels.unlink()
     yield
     # Cleanup
     if tmp_models.exists():
         shutil.rmtree(tmp_models)
-    if tmp_tokenizer.exists():
-        tmp_tokenizer.unlink()
     if tmp_labels.exists():
         tmp_labels.unlink()
 

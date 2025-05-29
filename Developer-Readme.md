@@ -40,7 +40,7 @@ This document provides an overview of the codebase, its structure, and instructi
 
 ## Configuration
 - All settings are managed in `config.py`, overridable via ENV vars:
-  - `MODEL_DIR`, `TOKENIZER_PATH`, `LABELS_PATH` – persistence paths
+- `MODEL_DIR`, `LABELS_PATH` – persistence paths
   - `USE_CUDA`, `MAX_BATCH_SIZE`, `API_KEY`, etc.
 
 ## Running Locally
