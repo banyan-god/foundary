@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict
 
 class Transaction(BaseModel):
@@ -8,7 +8,7 @@ class Transaction(BaseModel):
     amount: str
     category: Optional[str] = None
 
-    @validator("amount")
+    @field_validator("amount")
     def amount_must_be_float(cls, v):
         try:
             float(v)

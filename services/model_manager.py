@@ -115,7 +115,7 @@ def predict(request: InferenceRequest) -> InferenceResponse:
             load_all()
         model.eval()
         # check exact match mapping
-        cur = request.dict().get('current_transaction', {})
+        cur = request.model_dump().get('current_transaction', {})
         key = tuple(sorted(cur.items()))
         if key in _example_map:
             return InferenceResponse(predicted_category=_example_map[key], confidence=1.0)
@@ -134,7 +134,7 @@ def train(request: TrainRequest) -> TrainResponse:
     # reset and store examples for classification mapping
     _example_map.clear()
     for req, lbl in zip(request.data, request.labels):
-        cur = req.dict().get('current_transaction', {})
+        cur = req.model_dump().get('current_transaction', {})
         key = tuple(sorted(cur.items()))
         _example_map[key] = lbl
     # Autoregressive sequence training: cross-entropy next-token prediction on provided batch
@@ -148,7 +148,7 @@ def train(request: TrainRequest) -> TrainResponse:
     batch_inputs = []
     batch_targets = []
     for req, lbl in zip(request.data, request.labels):
-        base = prepare_input_json(req.dict()) + ' ' + lbl
+        base = prepare_input_json(req.model_dump()) + ' ' + lbl
         core_ids = tokenizer.encode(base)
         inp_ids = [bos] + core_ids
         tgt_ids = core_ids + [eos]
@@ -196,7 +196,7 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     bos = tokenizer.sp.bos_id()
     eos = tokenizer.sp.eos_id()
     pad = tokenizer.sp.pad_id()
-    base = prepare_input_json(request.input.dict()) + ' ' + request.label
+    base = prepare_input_json(request.input.model_dump()) + ' ' + request.label
     core_ids = tokenizer.encode(base)
     inp_ids = [bos] + core_ids
     tgt_ids = core_ids + [eos]
