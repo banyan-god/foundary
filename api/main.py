@@ -21,6 +21,10 @@ app = FastAPI(
     title="Transaction Classifier API",
     description="Production-ready microservice for text classification",
     version="1.0.0",
+    # OpenAPI schema and interactive docs (Swagger UI and ReDoc)
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan
 )
 app.include_router(health_router)

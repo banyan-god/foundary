@@ -6,7 +6,6 @@ class Config:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     USE_CUDA = os.getenv("USE_CUDA", "1") == "1"
     MODEL_VERSION = int(os.getenv("MODEL_VERSION", "1"))
-    API_KEY = os.getenv("API_KEY", None)
     MAX_BATCH_SIZE = int(os.getenv("MAX_BATCH_SIZE", "32"))
     # SentencePiece settings
     SP_MODEL_PREFIX = os.getenv("SP_MODEL_PREFIX", "./spm")
