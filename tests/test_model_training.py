@@ -1,3 +1,4 @@
+import pytest
 import os
 import shutil
 import pytest
@@ -18,8 +19,6 @@ def clean_model_env(tmp_path, monkeypatch):
     # Clean mgr state
     mgr.model = None
     mgr.tokenizer = None
-    mgr.label2idx.clear()
-    mgr.idx2label.clear()
     mgr.model_version = Config.MODEL_VERSION
     # Ensure no leftovers
     if tmp_models.exists():
@@ -46,6 +45,8 @@ def test_train_then_predict(tmp_path):
     res_train = client.post("/train", json=train_payload)
     assert res_train.status_code == 200, res_train.text
     dt = res_train.json()
+    # Print training results for inspection
+    print("Train response:", dt)
     assert dt["status"] == "training_complete"
     assert dt["loss"] >= 0.0
     assert 0.0 <= dt["accuracy"] <= 1.0
@@ -55,6 +56,8 @@ def test_train_then_predict(tmp_path):
     res_pred = client.post("/predict", json=pred_cat)
     assert res_pred.status_code == 200, res_pred.text
     dp = res_pred.json()
+    # Print prediction for 'meow' input
+    print("Predict 'meow' ->", dp)
     assert dp["predicted_category"] == "cat"
 
     # Predict doggy
@@ -62,5 +65,7 @@ def test_train_then_predict(tmp_path):
     res_pred2 = client.post("/predict", json=pred_dog)
     assert res_pred2.status_code == 200, res_pred2.text
     dp2 = res_pred2.json()
+    # Print prediction for 'woof' input
+    print("Predict 'woof' ->", dp2)
     # It should predict dog for 'woof' input; accept if model learned correctly
     assert dp2["predicted_category"] in ["cat", "dog"], "Prediction not in expected labels"

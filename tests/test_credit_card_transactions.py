@@ -1,5 +1,5 @@
-import shutil
 import pytest
+import shutil
 from fastapi.testclient import TestClient
 from config import Config
 import services.model_manager as mgr
@@ -16,8 +16,6 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(Config, 'LABELS_PATH', str(tmp_labels))
     mgr.model = None
     mgr.tokenizer = None
-    mgr.label2idx.clear()
-    mgr.idx2label.clear()
     mgr.model_version = Config.MODEL_VERSION
     # Ensure clean filesystem
     for path in (tmp_models, tmp_tokenizer, tmp_labels):
@@ -52,6 +50,7 @@ def test_credit_card_transaction_classification(client):
         rpt = client.post("/predict", json=pl)
         assert rpt.status_code == 200
         out = rpt.json()
+        print(f"Predicted category: {out.get('predicted_category')}, expected: {lbl}")
         assert out.get("predicted_category") == lbl
         assert out.get("confidence") >= 0.0
     # Test on new but similar transactions: label should be one of known classes
@@ -67,5 +66,6 @@ def test_credit_card_transaction_classification(client):
         assert rpt.status_code == 200
         out = rpt.json()
         cat = out.get("predicted_category")
+        print(f"Predicted category: {cat}, expected: {expected}")
         assert cat in known
         assert out.get("confidence") >= 0.0

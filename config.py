@@ -12,3 +12,7 @@ class Config:
     SP_MODEL_PREFIX = os.getenv("SP_MODEL_PREFIX", "./spm")
     SP_VOCAB_SIZE = int(os.getenv("SP_VOCAB_SIZE", "500"))
     SP_TRAIN_DATA = os.getenv("SP_TRAIN_DATA", "output.txt")  # CSV file path with 'text' column
+    # Autoregressive generation settings
+    AR_MAX_GENERATE_LENGTH = int(os.getenv("AR_MAX_GENERATE_LENGTH", "50"))
+    # Toggle autoregressive mode
+    USE_AR = os.getenv("USE_AR", "0") == "1"

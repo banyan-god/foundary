@@ -5,12 +5,35 @@ class SPTokenizer:
     def __init__(self, model_file: str):
         self.sp = spm.SentencePieceProcessor()
         self.sp.load(model_file)
+        # remember original model and vocab paths for saving
+        self.model_file = model_file
+        # assume vocab file has same prefix with .vocab extension
+        if model_file.endswith('.model'):
+            self.vocab_file = model_file[:-6] + '.vocab'
+        else:
+            self.vocab_file = model_file + '.vocab'
 
     def encode(self, text: str):
         return self.sp.encode(text, out_type=int)
 
     def save(self, path_prefix: str):
-        pass
+        """
+        Save the SentencePiece model and vocab files to the given path prefix.
+        Writes {path_prefix}.model and {path_prefix}.vocab
+        """
+        import shutil
+        # copy model file
+        try:
+            shutil.copy(self.model_file, f"{path_prefix}.model")
+        except Exception:
+            pass
+        # copy vocab file
+        try:
+            shutil.copy(self.vocab_file, f"{path_prefix}.vocab")
+        except Exception:
+            pass
+    def decode(self, ids: list[int]) -> str:
+        return self.sp.decode(ids)
 
     @classmethod
     def train(cls, input_file: str, model_prefix: str, vocab_size: int = 1000):
