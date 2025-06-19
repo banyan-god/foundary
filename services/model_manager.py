@@ -5,6 +5,7 @@ import threading
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+import random
 from config import Config
 from models.transformer_ar import VanillaTransformerDecoderAR
 from models.tokenizer import SPTokenizer
@@ -47,30 +48,40 @@ def save_all():
 
 def load_all():
     global model, tokenizer
-    # prepare tokenizer
-    sp_model = f"{Config.SP_MODEL_PREFIX}.model"
-    if not os.path.exists(sp_model):
-        trained = False
-        if Config.SP_TRAIN_DATA and os.path.exists(Config.SP_TRAIN_DATA):
+    # prepare tokenizer: choose SP model based on whether external training data is provided
+    if Config.SP_TRAIN_DATA:
+        sp_model = f"{Config.SP_MODEL_PREFIX}.model"
+        # train SentencePiece if missing, else fallback to packaged model
+        if not os.path.exists(sp_model):
             try:
                 SPTokenizer.train(
                     input_file=Config.SP_TRAIN_DATA,
                     model_prefix=Config.SP_MODEL_PREFIX,
                     vocab_size=Config.SP_VOCAB_SIZE,
                 )
-                trained = True
             except Exception:
-                trained = False
-        if not trained:
-            # fallback to existing global SP model
-            from shutil import copyfile
-            default_model = "spm.model"
-            default_vocab = "spm.vocab"
-            try:
-                copyfile(default_model, sp_model)
-                copyfile(default_vocab, f"{Config.SP_MODEL_PREFIX}.vocab")
-            except Exception:
-                pass
+                logger.error("Failed to train SP tokenizer; falling back to default model.")
+                import shutil
+                # fallback to shipped spm.model and spm.vocab at project root
+                default_model = os.path.join(os.getcwd(), 'spm.model')
+                default_vocab = os.path.join(os.getcwd(), 'spm.vocab')
+                try:
+                    shutil.copy(default_model, sp_model)
+                except Exception:
+                    pass
+                try:
+                    shutil.copy(default_vocab, f"{Config.SP_MODEL_PREFIX}.vocab")
+                except Exception:
+                    pass
+                if not os.path.exists(sp_model):
+                    raise RuntimeError("Could not obtain any SentencePiece model for tokenizer.")
+    else:
+        # no external data: load the shipped tokenizer model
+        sp_model = os.path.join(os.getcwd(), 'spm.model')
+        if not os.path.exists(sp_model):
+            raise RuntimeError("No SentencePiece model found for tokenizer.")
+
+    logger.info(f"Starting load_all: SP_MODEL_PREFIX={Config.SP_MODEL_PREFIX}")
     tokenizer = SPTokenizer(sp_model)
     # init or load AR model
     vocab_size = tokenizer.sp.get_piece_size()
@@ -85,6 +96,7 @@ def load_all():
             model.load_state_dict(state)
         except Exception:
             pass
+    logger.info(f"load_all completed: model={model}, tokenizer={tokenizer}")
 #    return
 #    return
 
@@ -217,3 +229,59 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     optimizer.step()
     save_all()
     return OnlineLearnResponse(status="online_learning_complete", loss=loss.item())
+    
+def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
+    """
+    Self-supervised AR training: predict next token on concatenated input texts.
+    :param texts: List of raw string sequences.
+    :param epochs: Number of training epochs.
+    :param batch_size: Batch size per step.
+    :param lr: Learning rate for optimizer.
+    :return: List of average loss per epoch.
+    """
+    if model is None or tokenizer is None:
+        load_all()
+    model.train()
+    bos = tokenizer.sp.bos_id()
+    eos = tokenizer.sp.eos_id()
+    pad = tokenizer.sp.pad_id()
+    # build input-target pairs
+    seqs = []
+    for text in texts:
+        ids = tokenizer.encode(text)
+        seqs.append(([bos] + ids, ids + [eos]))
+    # Setup optimizer only if model has trainable parameters
+    params = list(model.parameters())
+    optimizer = optim.Adam(params, lr=lr) if params else None
+    epoch_losses = []
+    for epoch in range(1, epochs + 1):
+        random.shuffle(seqs)
+        total_loss = 0.0
+        steps = 0
+        for i in range(0, len(seqs), batch_size):
+            batch = seqs[i:i+batch_size]
+            max_len = max(len(inp) for inp, _ in batch)
+            inp_batch, tgt_batch = [], []
+            for inp, tgt in batch:
+                pad_count = max_len - len(inp)
+                inp_batch.append(inp + [pad] * pad_count)
+                tgt_batch.append(tgt + [pad] * pad_count)
+            x = torch.tensor(inp_batch, dtype=torch.long, device=device)
+            y = torch.tensor(tgt_batch, dtype=torch.long, device=device)
+            logits = model(x, memory=None)
+            bsz, seq_len, vocab_size = logits.size()
+            logits_flat = logits.view(-1, vocab_size)
+            target_flat = y.view(-1)
+            loss = F.cross_entropy(logits_flat, target_flat, ignore_index=pad)
+            if optimizer:
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+            total_loss += loss.item()
+            steps += 1
+        avg = total_loss / steps if steps else 0.0
+        # progress output
+        print(f"Epoch {epoch}/{epochs}: avg loss = {avg:.4f}", flush=True)
+        epoch_losses.append(avg)
+    save_all()
+    return epoch_losses

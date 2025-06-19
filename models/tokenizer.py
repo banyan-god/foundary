@@ -37,10 +37,19 @@ class SPTokenizer:
 
     @classmethod
     def train(cls, input_file: str, model_prefix: str, vocab_size: int = 1000):
+        # ensure vocab size does not exceed number of training samples to avoid SP errors
+        effective_vocab = vocab_size
+        try:
+            with open(input_file, encoding='utf-8') as f:
+                lines = [l for l in f.read().splitlines() if l.strip()]
+            if lines:
+                effective_vocab = min(vocab_size, len(lines))
+        except Exception:
+            pass
         spm.SentencePieceTrainer.Train(
             input=input_file,
             model_prefix=model_prefix,
-            vocab_size=vocab_size,
+            vocab_size=effective_vocab,
             character_coverage=1.0,
             model_type='unigram'
         )

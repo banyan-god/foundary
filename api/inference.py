@@ -10,6 +10,9 @@ def predict_endpoint(request: InferenceRequest):
     try:
         return predict(request)
     except Exception as e:
+        import logging, traceback
+        logging.getLogger(__name__).error("Error in predict endpoint", exc_info=e)
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/batch_predict", response_model=BatchInferenceResponse)

@@ -11,14 +11,12 @@ def client(tmp_path, monkeypatch):
     # Redirect model artifacts to a temp dir and reset state
     tmp_models = tmp_path / "models"
     tmp_tokenizer = tmp_path / "tokenizer.json"
-    tmp_labels = tmp_path / "labels.json"
     monkeypatch.setattr(Config, 'MODEL_DIR', str(tmp_models))
-    monkeypatch.setattr(Config, 'LABELS_PATH', str(tmp_labels))
     mgr.model = None
     mgr.tokenizer = None
     mgr.model_version = Config.MODEL_VERSION
-    # Ensure clean filesystem
-    for path in (tmp_models, tmp_tokenizer, tmp_labels):
+    # Ensure clean filesystem for models and tokenizer
+    for path in (tmp_models, tmp_tokenizer):
         if path.exists():
             if path.is_dir():
                 shutil.rmtree(path)

@@ -12,10 +12,8 @@ from api.main import app
 def clean_model_env(tmp_path, monkeypatch):
     # Redirect model, tokenizer, and labels paths to temp directory
     tmp_models = tmp_path / "models"
-    tmp_labels = tmp_path / "labels.json"
     # Patch Config
     Config.MODEL_DIR = str(tmp_models)
-    Config.LABELS_PATH = str(tmp_labels)
     # Clean mgr state
     mgr.model = None
     mgr.tokenizer = None
@@ -23,14 +21,21 @@ def clean_model_env(tmp_path, monkeypatch):
     # Ensure no leftovers
     if tmp_models.exists():
         shutil.rmtree(tmp_models)
-    if tmp_labels.exists():
-        tmp_labels.unlink()
+    # create dummy SentencePiece files at SP_MODEL_PREFIX.model/vocab
+    sp_prefix = tmp_path / "spm_dummy"
+    # monkeypatch SP prefix
+    monkeypatch.setattr(Config, 'SP_MODEL_PREFIX', str(sp_prefix))
+    # write dummy files
+    model_file = sp_prefix.with_suffix('.model')
+    vocab_file = sp_prefix.with_suffix('.vocab')
+    model_file.write_text('')
+    vocab_file.write_text('')
+    # disable external SP training data
+    monkeypatch.setattr(Config, 'SP_TRAIN_DATA', None)
     yield
     # Cleanup
     if tmp_models.exists():
         shutil.rmtree(tmp_models)
-    if tmp_labels.exists():
-        tmp_labels.unlink()
 
 def test_train_then_predict(tmp_path):
     client = TestClient(app)

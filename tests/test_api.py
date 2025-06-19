@@ -15,7 +15,6 @@ def client(tmp_path, monkeypatch):
         writer.writerow(['Uber ride across town'])
     # Override model and SP settings to use temp directory
     monkeypatch.setattr(Config, 'MODEL_DIR', str(tmp_path / "models"))
-    monkeypatch.setattr(Config, 'LABELS_PATH', str(tmp_path / "labels.json"))
     monkeypatch.setattr(Config, 'SP_TRAIN_DATA', str(sp_csv))
     monkeypatch.setattr(Config, 'SP_MODEL_PREFIX', str(tmp_path / "spm_test"))
     from api.main import app
