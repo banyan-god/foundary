@@ -72,6 +72,20 @@ def load_all():
         vocab_size=vocab_size,
         max_length=Config.AR_MAX_GENERATE_LENGTH
     ).to(device)
+
+    # Optional torch.compile for speed (PyTorch 2.x+)
+    if Config.TORCH_COMPILE:
+        compile_fn = getattr(torch, "compile", None)
+        if callable(compile_fn):
+            try:
+                model = compile_fn(model)
+                logger.info("Model compiled with torch.compile")
+            except Exception as compile_exc:
+                # Fallback silently – don't break if compile fails (e.g. unsupported backend)
+                logger.warning(
+                    "torch.compile failed – proceeding with eager model. Error: %s",
+                    compile_exc,
+                )
     model_file = get_model_path(1)
     if os.path.exists(model_file):
         try:

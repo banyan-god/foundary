@@ -12,3 +12,7 @@ class Config:
     SP_TRAIN_DATA = os.getenv("SP_TRAIN_DATA", "../data/output.txt")  # CSV file path with 'text' column
     # Autoregressive generation settings
     AR_MAX_GENERATE_LENGTH = int(os.getenv("AR_MAX_GENERATE_LENGTH", "50"))
+    # Enable torch.compile (PyTorch 2.x+) for runtime optimisation
+    # Disabled by default so unit-tests relying on isinstance checks still pass;
+    # enable via env `TORCH_COMPILE=1` in production.
+    TORCH_COMPILE = os.getenv("TORCH_COMPILE", "1") == "1"
