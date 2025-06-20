@@ -43,9 +43,16 @@ class VanillaTransformerDecoderAR(nn.Module):
         # shape for transformer: (tgt_len, batch_size, d_model)
         x = x.permute(1, 0, 2)
         tgt_mask = self._generate_square_subsequent_mask(tgt_len).to(device)
-        # decoder-only: if no encoder memory provided, use x as memory (causal self-att)
+        # Decoder-only: for pure causal LM we **do not** want future-token
+        # information to leak through encoder-decoder cross-attention.  Passing
+        # the *same* sequence as `memory` (as the previous implementation did)
+        # breaks autoregressive training because cross-attention has full
+        # visibility of all positions.  Instead, when no external memory is
+        # given we supply a single zero vector, effectively disabling
+        # cross-attention while keeping the API compatible.
         if memory is None:
-            mem = x
+            d_model = self.token_embedding.embedding_dim
+            mem = torch.zeros(1, bsz, d_model, device=device)  # (src_len=1, B, d_model)
         else:
             mem = memory
         # pass only causal mask to self-attention; ignore memory_mask for simplicity
