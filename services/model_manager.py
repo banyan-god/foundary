@@ -238,6 +238,10 @@ def generate(request: GenerateRequest) -> GenerateResponse:
         prompt = prepare_input_json(request.model_dump())
         bos = tokenizer.sp.bos_id()
         seq_ids = [bos] + tokenizer.encode(prompt)
+        # cap initial prompt to model max_length
+        max_len_cap = getattr(model, 'max_length', None)
+        if max_len_cap and len(seq_ids) > max_len_cap:
+            seq_ids = seq_ids[-max_len_cap:]
         input_ids = torch.tensor([seq_ids], dtype=torch.long, device=device)
         tokens = []
         max_new = request.max_new_tokens or Config.AR_MAX_GENERATE_LENGTH
@@ -247,7 +251,12 @@ def generate(request: GenerateRequest) -> GenerateResponse:
                 last = logits[0, -1, :]
                 idx = int(torch.argmax(last).item())
                 tokens.append(idx)
+                # append new token
                 input_ids = torch.cat([input_ids, torch.tensor([[idx]], device=device)], dim=1)
+                # ensure we don't exceed model's max_length (position embeddings)
+                max_len_cap = getattr(model, 'max_length', None)
+                if max_len_cap and input_ids.size(1) > max_len_cap:
+                    input_ids = input_ids[:, -max_len_cap:]
         return GenerateResponse(tokens=tokens)
     
 def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
