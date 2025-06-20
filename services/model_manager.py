@@ -70,7 +70,11 @@ def load_all():
     vocab_size = tokenizer.sp.get_piece_size()
     model = VanillaTransformerDecoderAR(
         vocab_size=vocab_size,
-        max_length=Config.AR_MAX_GENERATE_LENGTH
+        d_model=Config.MODEL_D_MODEL,
+        nhead=Config.MODEL_N_HEAD,
+        num_layers=Config.MODEL_NUM_LAYERS,
+        max_length=Config.MODEL_MAX_LENGTH,
+        dropout=Config.MODEL_DROPOUT,
     ).to(device)
 
     # Optional torch.compile for speed (PyTorch 2.x+)

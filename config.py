@@ -15,6 +15,16 @@ class Config:
     SP_TRAIN_DATA = os.getenv("SP_TRAIN_DATA", "../data/output.txt")  # CSV file path with 'text' column
     # Autoregressive generation settings
     AR_MAX_GENERATE_LENGTH = int(os.getenv("AR_MAX_GENERATE_LENGTH", "50"))
+
+    # Transformer architecture defaults (can be overridden via env)
+    # Updated, more robust architecture defaults that still fit easily in CPU
+    # memory for unit-tests, while giving the model greater expressive power
+    # out-of-the-box.
+    MODEL_D_MODEL = int(os.getenv("MODEL_D_MODEL", "256"))
+    MODEL_N_HEAD = int(os.getenv("MODEL_N_HEAD", "8"))
+    MODEL_NUM_LAYERS = int(os.getenv("MODEL_NUM_LAYERS", "8"))
+    MODEL_MAX_LENGTH = int(os.getenv("MODEL_MAX_LENGTH", "256"))
+    MODEL_DROPOUT = float(os.getenv("MODEL_DROPOUT", "0.1"))
     # Enable torch.compile (PyTorch 2.x+) for runtime optimisation
     # Disabled by default so unit-tests relying on isinstance checks still pass;
     # enable via env `TORCH_COMPILE=1` in production.

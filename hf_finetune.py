@@ -72,6 +72,10 @@ def fine_tune_from_hf_dataset(
     category_field: str = "category",
     limit: int | None = None,
     batch_size: int = 32,
+    weight_decay: float = 0.01,
+    warmup_ratio: float = 0.1,
+    label_smoothing: float = 0.0,
+    use_amp: bool = False,
 ) -> None:
     """End-to-end fine-tuning entry point."""
 
@@ -107,7 +111,9 @@ def fine_tune_from_hf_dataset(
         batch_lbl = labels[start:end]
 
         train_req = TrainRequest(data=batch_req, labels=batch_lbl)
-        resp = mgr.train(train_req)
+        resp = mgr.train(
+            train_req,
+        )
         print(
             f"Batch {i + 1}/{num_batches} – loss: {resp.loss:.4f}, accuracy: {resp.accuracy:.4f}",
             flush=True,
