@@ -43,6 +43,8 @@ class GenerateRequest(BaseModel):
 
 class GenerateResponse(BaseModel):
     tokens: List[int]
+    # decoded text from the generated token IDs
+    text: str
 
 class TrainRequest(BaseModel):
     data: List[InferenceRequest]

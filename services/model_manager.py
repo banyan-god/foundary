@@ -257,7 +257,12 @@ def generate(request: GenerateRequest) -> GenerateResponse:
                 max_len_cap = getattr(model, 'max_length', None)
                 if max_len_cap and input_ids.size(1) > max_len_cap:
                     input_ids = input_ids[:, -max_len_cap:]
-        return GenerateResponse(tokens=tokens)
+        # decode tokens to text if supported
+        try:
+            text = tokenizer.decode(tokens)
+        except Exception:
+            text = ''
+        return GenerateResponse(tokens=tokens, text=text)
     
 def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
     """
