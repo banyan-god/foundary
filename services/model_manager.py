@@ -13,7 +13,8 @@ from schemas.transaction import (
     InferenceRequest, InferenceResponse,
     BatchInferenceRequest, BatchInferenceResponse,
     TrainRequest, TrainResponse,
-    OnlineLearnRequest, OnlineLearnResponse
+    OnlineLearnRequest, OnlineLearnResponse,
+    GenerateRequest, GenerateResponse
 )
 
 model_lock = threading.Lock()
@@ -226,6 +227,28 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     optimizer.step()
     save_all()
     return OnlineLearnResponse(status="online_learning_complete", loss=loss.item())
+    
+def generate(request: GenerateRequest) -> GenerateResponse:
+    """Autoregressively generate next token IDs from a prompt."""
+    with model_lock:
+        if model is None or tokenizer is None:
+            load_all()
+        model.eval()
+        # build prompt string
+        prompt = prepare_input_json(request.model_dump())
+        bos = tokenizer.sp.bos_id()
+        seq_ids = [bos] + tokenizer.encode(prompt)
+        input_ids = torch.tensor([seq_ids], dtype=torch.long, device=device)
+        tokens = []
+        max_new = request.max_new_tokens or Config.AR_MAX_GENERATE_LENGTH
+        with torch.no_grad():
+            for _ in range(max_new):
+                logits = model(input_ids)
+                last = logits[0, -1, :]
+                idx = int(torch.argmax(last).item())
+                tokens.append(idx)
+                input_ids = torch.cat([input_ids, torch.tensor([[idx]], device=device)], dim=1)
+        return GenerateResponse(tokens=tokens)
     
 def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
     """

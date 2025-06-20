@@ -32,6 +32,17 @@ class BatchInferenceRequest(BaseModel):
 
 class BatchInferenceResponse(BaseModel):
     results: List[InferenceResponse]
+class GenerateRequest(BaseModel):
+    """Generate next tokens autoregressively from a prompt transaction."""
+    current_transaction: Transaction
+    user_history: List[UserHistoryItem] = []
+    max_new_tokens: Optional[int] = Field(
+        default=100,
+        description="Maximum number of tokens to generate"
+    )
+
+class GenerateResponse(BaseModel):
+    tokens: List[int]
 
 class TrainRequest(BaseModel):
     data: List[InferenceRequest]

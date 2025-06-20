@@ -1,7 +1,14 @@
 from fastapi import APIRouter, HTTPException, status
 from config import Config
-from services.model_manager import predict, batch_predict
-from schemas.transaction import InferenceRequest, BatchInferenceRequest, InferenceResponse, BatchInferenceResponse
+from services.model_manager import predict, batch_predict, generate
+from schemas.transaction import (
+    InferenceRequest,
+    BatchInferenceRequest,
+    InferenceResponse,
+    BatchInferenceResponse,
+    GenerateRequest,
+    GenerateResponse,
+)
 
 router = APIRouter(prefix="", tags=["Inference"])
 
@@ -23,4 +30,16 @@ def batch_predict_endpoint(request: BatchInferenceRequest):
     try:
         return batch_predict(request)
     except Exception as e:
+        import logging, traceback
+        logging.getLogger(__name__).error("Error in batch_predict endpoint", exc_info=e)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/generate", response_model=GenerateResponse)
+def generate_endpoint(request: GenerateRequest):
+    try:
+        return generate(request)
+    except Exception as e:
+        import logging, traceback
+        logging.getLogger(__name__).error("Error in generate endpoint", exc_info=e)
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
