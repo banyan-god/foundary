@@ -4,6 +4,8 @@ class Config:
     MODEL_DIR = os.getenv("MODEL_DIR", "./models")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     USE_CUDA = os.getenv("USE_CUDA", "1") == "1"
+    # GPU index selection (when multiple GPUs present)
+    CUDA_DEVICE_ID = int(os.getenv("CUDA_DEVICE_ID", "0"))
     MODEL_VERSION = int(os.getenv("MODEL_VERSION", "1"))
     MAX_BATCH_SIZE = int(os.getenv("MAX_BATCH_SIZE", "32"))
     # SentencePiece settings

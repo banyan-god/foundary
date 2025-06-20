@@ -25,7 +25,17 @@ try:
     _use_mps = torch.backends.mps.is_available() and torch.backends.mps.is_built()
 except Exception:
     _use_mps = False
-device = torch.device("cuda" if _use_cuda else "mps" if _use_mps else "cpu")
+
+# Select explicit GPU index when multiple GPUs are present.
+if _use_cuda:
+    idx = Config.CUDA_DEVICE_ID
+    try:
+        torch.cuda.set_device(idx)
+        device = torch.device(f"cuda:{idx}")
+    except Exception:
+        device = torch.device("cuda")
+else:
+    device = torch.device("mps" if _use_mps else "cpu")
 model = None
 model_version = Config.MODEL_VERSION
 tokenizer = None
