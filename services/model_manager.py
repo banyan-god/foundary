@@ -152,6 +152,10 @@ def train(request: TrainRequest) -> TrainResponse:
     for req, lbl in zip(request.data, request.labels):
         base = prepare_input_json(req.model_dump()) + ' ' + lbl
         core_ids = tokenizer.encode(base)
+        # Truncate to fit positional-embedding limit if the loaded model defines it
+        max_len_cap = getattr(model, "max_length", None)
+        if max_len_cap and len(core_ids) + 2 > max_len_cap:
+            core_ids = core_ids[: max_len_cap - 2]
         inp_ids = [bos] + core_ids
         tgt_ids = core_ids + [eos]
         batch_inputs.append(inp_ids)
@@ -202,6 +206,9 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
         pad = 0
     base = prepare_input_json(request.input.model_dump()) + ' ' + request.label
     core_ids = tokenizer.encode(base)
+    max_len_cap = getattr(model, "max_length", None)
+    if max_len_cap and len(core_ids) + 2 > max_len_cap:
+        core_ids = core_ids[: max_len_cap - 2]
     inp_ids = [bos] + core_ids
     tgt_ids = core_ids + [eos]
     # tensor
@@ -241,6 +248,9 @@ def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
     seqs = []
     for text in texts:
         ids = tokenizer.encode(text)
+        max_len_cap = getattr(model, "max_length", None)
+        if max_len_cap and len(ids) + 2 > max_len_cap:
+            ids = ids[: max_len_cap - 2]
         seqs.append(([bos] + ids, ids + [eos]))
     # Setup optimizer only if model has trainable parameters
     params = list(model.parameters())
