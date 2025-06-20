@@ -74,7 +74,14 @@ def load_all():
     ).to(device)
 
     # Optional torch.compile for speed (PyTorch 2.x+)
-    if Config.TORCH_COMPILE:
+    # Compile only when explicitly enabled **and** running on CUDA to avoid
+    # instabilities on some back-ends (e.g. MPS) and during the test suite.
+    run_under_pytest = bool(os.getenv("PYTEST_CURRENT_TEST"))
+    if (
+        Config.TORCH_COMPILE
+        and device.type == "cuda"
+        and not run_under_pytest
+    ):
         compile_fn = getattr(torch, "compile", None)
         if callable(compile_fn):
             try:
@@ -321,7 +328,25 @@ def generate(request: GenerateRequest) -> GenerateResponse:
             text = ''
         return GenerateResponse(tokens=tokens, text=text)
     
-def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
+# --------- Training Utility -------------------------------------------------
+# Extended with modern training tricks: AdamW, cosine schedule, warm-up, label
+# smoothing, gradient clipping and optional mixed-precision via AMP.
+# ---------------------------------------------------------------------------
+
+
+def ar_train(
+    texts,
+    epochs: int = 1,
+    batch_size: int = 8,
+    lr: float = 1e-3,
+    *,
+    weight_decay: float = 0.01,
+    betas=(0.9, 0.95),
+    warmup_ratio: float = 0.1,
+    max_grad_norm: float = 1.0,
+    label_smoothing: float = 0.0,
+    use_amp: bool = False,
+):
     """
     Self-supervised AR training: predict next token on concatenated input texts.
     :param texts: List of raw string sequences.
@@ -346,9 +371,28 @@ def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
         if max_len_cap and len(ids) + 2 > max_len_cap:
             ids = ids[: max_len_cap - 2]
         seqs.append(([bos] + ids, ids + [eos]))
-    # Setup optimizer only if model has trainable parameters
+    # Optimizer & scheduler
     params = list(model.parameters())
-    optimizer = optim.Adam(params, lr=lr) if params else None
+    optimizer = (
+        optim.AdamW(params, lr=lr, betas=betas, weight_decay=weight_decay)
+        if params
+        else None
+    )
+
+    # Total steps = batches per epoch * epochs
+    total_steps = ((len(seqs) + batch_size - 1) // batch_size) * epochs
+    if optimizer:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=total_steps
+        )
+    else:
+        scheduler = None
+
+    scaler = (
+        torch.cuda.amp.GradScaler(enabled=use_amp and device.type == "cuda")
+        if optimizer
+        else None
+    )
     epoch_losses = []
     for epoch in range(1, epochs + 1):
         random.shuffle(seqs)
@@ -364,20 +408,49 @@ def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
                 tgt_batch.append(tgt + [pad] * pad_count)
             x = torch.tensor(inp_batch, dtype=torch.long, device=device)
             y = torch.tensor(tgt_batch, dtype=torch.long, device=device)
-            logits = model(x, memory=None)
+
+            if use_amp:
+                with torch.cuda.amp.autocast():
+                    logits = model(x, memory=None)
+            else:
+                logits = model(x, memory=None)
             bsz, seq_len, vocab_size = logits.size()
             logits_flat = logits.view(-1, vocab_size)
             target_flat = y.view(-1)
-            loss = F.cross_entropy(logits_flat, target_flat, ignore_index=pad)
+            loss = F.cross_entropy(
+                logits_flat,
+                target_flat,
+                ignore_index=pad,
+                label_smoothing=label_smoothing,
+            )
+
             if optimizer:
                 optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                if use_amp:
+                    scaler.scale(loss).backward()
+                    # gradient clipping after unscale
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(
+                        model.parameters(), max_grad_norm
+                    )
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(
+                        model.parameters(), max_grad_norm
+                    )
+                    optimizer.step()
+                if scheduler:
+                    scheduler.step()
             total_loss += loss.item()
             steps += 1
         avg = total_loss / steps if steps else 0.0
-        # progress output
-        print(f"Epoch {epoch}/{epochs}: avg loss = {avg:.4f}", flush=True)
+        ppl = (torch.exp(torch.tensor(avg))).item() if avg < 20 else float("inf")
+        print(
+            f"Epoch {epoch}/{epochs}: avg loss = {avg:.4f} | ppl = {ppl:.2f}",
+            flush=True,
+        )
         epoch_losses.append(avg)
     save_all()
     return epoch_losses

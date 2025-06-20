@@ -59,6 +59,10 @@ def train_from_hf_dataset(
     epochs: int = 1,
     batch_size: int = 8,
     lr: float = 1e-3,
+    weight_decay: float = 0.01,
+    warmup_ratio: float = 0.1,
+    label_smoothing: float = 0.0,
+    use_amp: bool = False,
 ) -> List[float]:
     """End-to-end training util used by the CLI below."""
 
@@ -81,7 +85,16 @@ def train_from_hf_dataset(
         Config.SP_MODEL_PREFIX = str(tmpdir_path / "spm_model")
 
     # AR training – reuse *lines* list.
-    losses = ar_train(lines, epochs=epochs, batch_size=batch_size, lr=lr)
+    losses = ar_train(
+        lines,
+        epochs=epochs,
+        batch_size=batch_size,
+        lr=lr,
+        weight_decay=weight_decay,
+        warmup_ratio=warmup_ratio,
+        label_smoothing=label_smoothing,
+        use_amp=use_amp,
+    )
 
     if tmp_ctx:
         tmp_ctx.cleanup()
@@ -99,6 +112,14 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight-decay", type=float, default=0.01)
+    parser.add_argument("--warmup-ratio", type=float, default=0.1)
+    parser.add_argument("--label-smoothing", type=float, default=0.0)
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        help="Enable mixed-precision training (CUDA only)",
+    )
 
     args = parser.parse_args()
 
@@ -118,6 +139,10 @@ def main() -> None:
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
+        weight_decay=args.weight_decay,
+        warmup_ratio=args.warmup_ratio,
+        label_smoothing=args.label_smoothing,
+        use_amp=args.amp,
     )
 
     for idx, loss in enumerate(losses, start=1):
