@@ -6,7 +6,7 @@ class VanillaTransformerDecoderAR(nn.Module):
     Autoregressive Transformer decoder-only model.
     Supports causal self-attention with optional encoder-decoder cross-attention.
     """
-    def __init__(self, vocab_size, d_model=128, nhead=4, num_layers=2,
+    def __init__(self, vocab_size, d_model=128, nhead=4, num_layers=8,
                  max_length=128, dropout=0.1):
         super().__init__()
         self.token_embedding = nn.Embedding(vocab_size, d_model)
