@@ -67,22 +67,24 @@ def train_from_hf_dataset(
         ds = ds.select(range(min(limit, len(ds))))
 
     # Create temp directory that will live for the duration of the run
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir_path = Path(tmpdir)
+    # Either reuse provided SentencePiece model or create a temporary new one.
+    tmp_ctx = tempfile.TemporaryDirectory() if not Config.SP_MODEL_PREFIX else None
+    tmpdir_path = Path(tmp_ctx.name) if tmp_ctx else None
+
+    # Build list of text lines once.
+    lines = prepare_text_lines(ds, fields)
+
+    if not Config.SP_MODEL_PREFIX:  # will train a new tokenizer
         sp_text_file = tmpdir_path / "sp_text.txt"
-
-        # Build text lines & dump into file
-        lines = prepare_text_lines(ds, fields)
         sp_text_file.write_text("\n".join(lines), encoding="utf-8")
-
-        # Point config to this temporary file / prefix so that SPTokenizer will
-        # be trained on the very same text.
         Config.SP_TRAIN_DATA = str(sp_text_file)
         Config.SP_MODEL_PREFIX = str(tmpdir_path / "spm_model")
 
-        # AR training – can reuse *lines* list we already built.
-        losses = ar_train(lines, epochs=epochs, batch_size=batch_size, lr=lr)
+    # AR training – reuse *lines* list.
+    losses = ar_train(lines, epochs=epochs, batch_size=batch_size, lr=lr)
 
+    if tmp_ctx:
+        tmp_ctx.cleanup()
     return losses
 
 
@@ -92,11 +94,21 @@ def main() -> None:
     parser.add_argument("--split", default="train", help="Dataset split to use (default: train)")
     parser.add_argument("--fields", nargs="*", help="Space-separated list of columns to concatenate. If omitted, all fields are used.")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of rows for quick experiments")
+    parser.add_argument("--sp-model", type=str, default=None,
+                        help="Path to an existing SentencePiece .model to reuse (skip tokenizer training)")
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-3)
 
     args = parser.parse_args()
+
+    # If user supplies --sp-model we bypass tokenizer training.
+    if args.sp_model:
+        sp_path = Path(args.sp_model)
+        if not sp_path.exists():
+            raise FileNotFoundError(f"Provided --sp-model '{sp_path}' does not exist")
+        Config.SP_MODEL_PREFIX = str(sp_path.with_suffix(''))
+        Config.SP_TRAIN_DATA = ""  # disable automatic training in load_all
 
     losses = train_from_hf_dataset(
         dataset_name=args.dataset,
