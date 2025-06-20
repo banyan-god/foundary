@@ -118,6 +118,49 @@ def predict(request: InferenceRequest) -> InferenceResponse:
             return InferenceResponse(predicted_category=_example_map[key], confidence=1.0)
         # fallback to first known label if any
         default = next(iter(_example_map.values()), '')
+        # Only attempt generation when no default labels are available
+        if default == '':
+            try:
+                bos = tokenizer.sp.bos_id()
+                prompt = prepare_input_json(request.model_dump())
+                seq_ids = [bos] + tokenizer.encode(prompt)
+                max_len_cap = getattr(model, 'max_length', None)
+                if max_len_cap and len(seq_ids) > max_len_cap:
+                    seq_ids = seq_ids[-max_len_cap:]
+
+                input_ids = torch.tensor([seq_ids], dtype=torch.long, device=device)
+                tokens = []
+                max_new = 10  # small generation window to keep latency low
+                with torch.no_grad():
+                    for _ in range(max_new):
+                        logits = model(input_ids)
+                        last = logits[0, -1, :]
+                        idx = int(torch.argmax(last).item())
+                        # stop if EOS generated
+                        if idx == tokenizer.sp.eos_id():
+                            break
+                        tokens.append(idx)
+                        input_ids = torch.cat(
+                            [input_ids, torch.tensor([[idx]], device=device)], dim=1
+                        )
+                        if max_len_cap and input_ids.size(1) > max_len_cap:
+                            input_ids = input_ids[:, -max_len_cap:]
+                # decode generated tokens -> text (best effort)
+                try:
+                    gen_text = tokenizer.decode(tokens).strip()
+                except Exception:
+                    gen_text = ''
+                # heuristic: first whitespace-separated token is predicted category
+                if gen_text:
+                    predicted = gen_text.split()[0]
+                    if predicted:
+                        return InferenceResponse(
+                            predicted_category=predicted, confidence=0.5
+                        )
+            except Exception:
+                # Any failure: silently fall back to default behaviour
+                pass
+
         return InferenceResponse(predicted_category=default, confidence=0.0)
 
 def batch_predict(request: BatchInferenceRequest) -> BatchInferenceResponse:
