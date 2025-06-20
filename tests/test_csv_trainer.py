@@ -88,3 +88,25 @@ def test_main_entrypoint(monkeypatch, tmp_path, capsys):
     assert abs(calls['lr'] - 0.05) < 1e-6
     # We invoked main(), so train was called; output may be empty under fake_train
     assert isinstance(out, str)
+  
+def test_train_from_hf(monkeypatch, capsys):
+    import csv_trainer as ct
+    monkeypatch.setattr(ct, '_HAS_DATASETS', True)
+    fake_data = [{'col1': 'x', 'col2': 'y'}, {'col1': 'a', 'col2': 'b'}]
+    fake_ds = {'train': fake_data}
+    monkeypatch.setattr(ct, 'load_dataset', lambda name: fake_ds)
+    def fake_ar_train(texts, epochs, batch_size, lr):
+        assert texts == ['x y', 'a b']
+        return [0.2, 0.4]
+    monkeypatch.setattr(ct, 'ar_train', fake_ar_train)
+    losses = ct.train_from_hf('dummy_dataset', 'train', epochs=2, batch_size=1, lr=0.01)
+    assert losses == [0.2, 0.4]
+    out = capsys.readouterr().out
+    assert 'Epoch 1/2 - avg loss: 0.2000' in out
+    assert 'Epoch 2/2 - avg loss: 0.4000' in out
+
+def test_train_from_hf_no_datasets(monkeypatch):
+    import csv_trainer as ct
+    monkeypatch.setattr(ct, '_HAS_DATASETS', False)
+    with pytest.raises(ImportError):
+        ct.train_from_hf('any', 'train', epochs=1, batch_size=1, lr=0.1)
