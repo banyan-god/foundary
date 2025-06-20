@@ -141,6 +141,12 @@ def train(request: TrainRequest) -> TrainResponse:
     bos = tokenizer.sp.bos_id()
     eos = tokenizer.sp.eos_id()
     pad = tokenizer.sp.pad_id()
+    # SentencePiece returns -1 when pad token is not defined; on CUDA a negative
+    # index will trigger a device-side assert in nn.Embedding.  Map it to 0
+    # (conventionally <unk>) so that it references a valid row in the embedding
+    # matrix while still being ignored via *ignore_index* during loss.
+    if pad < 0:
+        pad = 0
     batch_inputs = []
     batch_targets = []
     for req, lbl in zip(request.data, request.labels):
@@ -192,6 +198,8 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     bos = tokenizer.sp.bos_id()
     eos = tokenizer.sp.eos_id()
     pad = tokenizer.sp.pad_id()
+    if pad < 0:
+        pad = 0
     base = prepare_input_json(request.input.model_dump()) + ' ' + request.label
     core_ids = tokenizer.encode(base)
     inp_ids = [bos] + core_ids
@@ -227,6 +235,8 @@ def ar_train(texts, epochs=1, batch_size=8, lr=1e-3):
     bos = tokenizer.sp.bos_id()
     eos = tokenizer.sp.eos_id()
     pad = tokenizer.sp.pad_id()
+    if pad < 0:
+        pad = 0
     # build input-target pairs
     seqs = []
     for text in texts:
