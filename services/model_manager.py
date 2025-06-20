@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import random
+# bitsandbytes is optional; import lazily when required.
 from config import Config
 from models.transformer_ar import VanillaTransformerDecoderAR
 from models.tokenizer import SPTokenizer
@@ -32,6 +33,13 @@ tokenizer = None
 _example_map = {}
 logger = logging.getLogger("transaction_classifier")
 logger.info(f"Using device: {device}")
+
+# Opt-in to TF32 on Ampere+ when on CUDA for faster matmul with minimal accuracy hit.
+if device.type == "cuda":
+    try:
+        torch.set_float32_matmul_precision("high")
+    except Exception:
+        pass
 
 def get_model_path(version):
     if not os.path.exists(Config.MODEL_DIR):
@@ -377,11 +385,30 @@ def ar_train(
         seqs.append(([bos] + ids, ids + [eos]))
     # Optimizer & scheduler
     params = list(model.parameters())
-    optimizer = (
-        optim.AdamW(params, lr=lr, betas=betas, weight_decay=weight_decay)
-        if params
-        else None
-    )
+    # Choose between standard AdamW and bitsandbytes 8-bit AdamW
+    if params:
+        if Config.USE_8BIT_OPT:
+            try:
+                import bitsandbytes as bnb
+
+                optimizer = bnb.optim.AdamW8bit(
+                    params, lr=lr, betas=betas, weight_decay=weight_decay
+                )
+                logger.info("Using 8-bit AdamW optimizer from bitsandbytes")
+            except Exception as exc:
+                logger.warning(
+                    "bitsandbytes AdamW8bit unavailable (%s). Falling back to torch AdamW.",
+                    exc,
+                )
+                optimizer = optim.AdamW(
+                    params, lr=lr, betas=betas, weight_decay=weight_decay
+                )
+        else:
+            optimizer = optim.AdamW(
+                params, lr=lr, betas=betas, weight_decay=weight_decay
+            )
+    else:
+        optimizer = None
 
     # Total steps = batches per epoch * epochs
     total_steps = ((len(seqs) + batch_size - 1) // batch_size) * epochs
@@ -392,11 +419,12 @@ def ar_train(
     else:
         scheduler = None
 
-    scaler = (
-        torch.cuda.amp.GradScaler(enabled=use_amp and device.type == "cuda")
-        if optimizer
-        else None
-    )
+    if optimizer and use_amp and device.type == "cuda":
+        from torch.amp import GradScaler as _GradScaler
+
+        scaler = _GradScaler()
+    else:
+        scaler = None
     epoch_losses = []
     for epoch in range(1, epochs + 1):
         random.shuffle(seqs)
@@ -414,7 +442,7 @@ def ar_train(
             y = torch.tensor(tgt_batch, dtype=torch.long, device=device)
 
             if use_amp:
-                with torch.cuda.amp.autocast():
+                with torch.autocast("cuda"):
                     logits = model(x, memory=None)
             else:
                 logits = model(x, memory=None)

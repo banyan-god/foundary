@@ -9,3 +9,7 @@ transformers
 sentencepiece
 pandas
 datasets
+# Optional: memory-efficient 8-bit optimizers. Install only where wheels exist
+# (Linux x86_64 CUDA). Declared as an *extra* so pip on unsupported platforms
+# will skip it without failing.
+bitsandbytes; platform_system=="Linux" and platform_machine=="x86_64"

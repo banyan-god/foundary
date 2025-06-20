@@ -25,6 +25,9 @@ class Config:
     MODEL_NUM_LAYERS = int(os.getenv("MODEL_NUM_LAYERS", "8"))
     MODEL_MAX_LENGTH = int(os.getenv("MODEL_MAX_LENGTH", "256"))
     MODEL_DROPOUT = float(os.getenv("MODEL_DROPOUT", "0.1"))
+
+    # Use bitsandbytes 8-bit AdamW to save memory (set env USE_8BIT_OPT=1).
+    USE_8BIT_OPT = os.getenv("USE_8BIT_OPT", "0") == "1"
     # Enable torch.compile (PyTorch 2.x+) for runtime optimisation
     # Disabled by default so unit-tests relying on isinstance checks still pass;
     # enable via env `TORCH_COMPILE=1` in production.
