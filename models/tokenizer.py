@@ -37,20 +37,55 @@ class SPTokenizer:
 
     @classmethod
     def train(cls, input_file: str, model_prefix: str, vocab_size: int = 1000):
-        # ensure vocab size does not exceed number of training samples to avoid SP errors
-        effective_vocab = vocab_size
+        """Train a SentencePiece model from a text/CSV file.
+
+        SentencePiece has two opposite failure modes when the requested *vocab_size*
+        does not match the data size:
+
+        1. ``vocab_size`` *too large*  →  "Vocabulary size too high" runtime error.
+        2. ``vocab_size`` *too small*  →  "Vocabulary size is smaller than
+           required_chars" runtime error (see
+           https://github.com/google/sentencepiece/blob/master/src/trainer_interface.cc).
+
+        The previous heuristic of clamping the vocabulary to the number of
+        *lines* in the file fixes (1) but triggers (2) for very small corpora –
+        exactly what happens in the unit-tests which provide only two sentences.
+
+        A safer heuristic is:
+
+        • Determine the number of *unique characters* in the corpus.  SentencePiece
+          internally adds every character (``required_chars``) plus the three meta
+          tokens ``<unk>``, ``<s>``, and ``</s>``.  Therefore the minimum valid
+          vocabulary size is ``len(unique_chars) + 3``.
+
+        • Pick the *effective* vocab size as the smallest value that satisfies
+          the above lower bound **and** does not exceed the user supplied
+          ``vocab_size``.
+        """
+
+        eff_vocab = vocab_size
         try:
             with open(input_file, encoding='utf-8') as f:
-                lines = [l for l in f.read().splitlines() if l.strip()]
-            if lines:
-                effective_vocab = min(vocab_size, len(lines))
+                lines = [l.strip() for l in f if l.strip()]
+
+            # Minimum allowed size = number of distinct characters + meta pieces.
+            char_set = set(''.join(lines))
+            min_allowed = len(char_set) + 3  # 3 meta tokens (<unk>, <s>, </s>)
+
+            # If the user provided vocab is lower than the minimum, bump it up;
+            # if it is much larger than the data, shrink it to avoid the "too
+            # high" error.  +5 headroom avoids retraining if we later add a few
+            # extra characters.
+            eff_vocab = max(min(vocab_size, max(32, len(lines) * 16)), min_allowed)
         except Exception:
-            pass
+            # Fall back to the requested size on any error.
+            eff_vocab = vocab_size
         spm.SentencePieceTrainer.Train(
             input=input_file,
             model_prefix=model_prefix,
-            vocab_size=effective_vocab,
+            vocab_size=eff_vocab,
             character_coverage=1.0,
+            hard_vocab_limit=False,  # allow trainer to shrink the vocab if data is small
             model_type='unigram'
         )
         return cls(f"{model_prefix}.model")

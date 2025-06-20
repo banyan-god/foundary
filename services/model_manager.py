@@ -48,38 +48,20 @@ def save_all():
 
 def load_all():
     global model, tokenizer
-    # prepare tokenizer: choose SP model based on whether external training data is provided
-    if Config.SP_TRAIN_DATA:
-        sp_model = f"{Config.SP_MODEL_PREFIX}.model"
-        # train SentencePiece if missing, else fallback to packaged model
+    # Prepare tokenizer model: train from SP_TRAIN_DATA if available, else use shipped model
+    if Config.SP_TRAIN_DATA and os.path.exists(Config.SP_TRAIN_DATA):
+        prefix = Config.SP_MODEL_PREFIX
+        sp_model = f"{prefix}.model"
         if not os.path.exists(sp_model):
-            try:
-                SPTokenizer.train(
-                    input_file=Config.SP_TRAIN_DATA,
-                    model_prefix=Config.SP_MODEL_PREFIX,
-                    vocab_size=Config.SP_VOCAB_SIZE,
-                )
-            except Exception:
-                logger.error("Failed to train SP tokenizer; falling back to default model.")
-                import shutil
-                # fallback to shipped spm.model and spm.vocab at project root
-                default_model = os.path.join(os.getcwd(), 'spm.model')
-                default_vocab = os.path.join(os.getcwd(), 'spm.vocab')
-                try:
-                    shutil.copy(default_model, sp_model)
-                except Exception:
-                    pass
-                try:
-                    shutil.copy(default_vocab, f"{Config.SP_MODEL_PREFIX}.vocab")
-                except Exception:
-                    pass
-                if not os.path.exists(sp_model):
-                    raise RuntimeError("Could not obtain any SentencePiece model for tokenizer.")
+            SPTokenizer.train(
+                input_file=Config.SP_TRAIN_DATA,
+                model_prefix=prefix,
+                vocab_size=Config.SP_VOCAB_SIZE,
+            )
     else:
-        # no external data: load the shipped tokenizer model
         sp_model = os.path.join(os.getcwd(), 'spm.model')
-        if not os.path.exists(sp_model):
-            raise RuntimeError("No SentencePiece model found for tokenizer.")
+    if not os.path.exists(sp_model):
+        raise RuntimeError("No SentencePiece model found for tokenizer.")
 
     logger.info(f"Starting load_all: SP_MODEL_PREFIX={Config.SP_MODEL_PREFIX}")
     tokenizer = SPTokenizer(sp_model)
