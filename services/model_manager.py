@@ -387,14 +387,40 @@ def ar_train(
     pad = tokenizer.sp.pad_id()
     if pad < 0:
         pad = 0
-    # build input-target pairs
-    seqs = []
-    for text in texts:
-        ids = tokenizer.encode(text)
+    # ------------------------------------------------------------------
+    # Build input-target pairs using HuggingFace datasets map for
+    # parallel tokenisation when *texts* is large.  Falls back to a plain
+    # Python loop for small lists to avoid multiprocessing overhead.
+    # ------------------------------------------------------------------
+
+    if len(texts) > 1000:
+        from datasets import Dataset
+        import os
+
         max_len_cap = getattr(model, "max_length", None)
-        if max_len_cap and len(ids) + 2 > max_len_cap:
-            ids = ids[: max_len_cap - 2]
-        seqs.append(([bos] + ids, ids + [eos]))
+        ds = Dataset.from_dict({"text": list(texts)})
+
+        def _tok(batch):
+            inps, tgts = [], []
+            for t in batch["text"]:
+                ids = tokenizer.encode(t)
+                if max_len_cap and len(ids) + 2 > max_len_cap:
+                    ids = ids[: max_len_cap - 2]
+                inps.append([bos] + ids)
+                tgts.append(ids + [eos])
+            return {"inp": inps, "tgt": tgts}
+
+        num_proc = max(1, min(os.cpu_count() or 1, 8))
+        ds = ds.map(_tok, batched=True, num_proc=num_proc, desc="Tokenising")
+        seqs = list(zip(ds["inp"], ds["tgt"]))
+    else:
+        seqs = []
+        max_len_cap = getattr(model, "max_length", None)
+        for text in texts:
+            ids = tokenizer.encode(text)
+            if max_len_cap and len(ids) + 2 > max_len_cap:
+                ids = ids[: max_len_cap - 2]
+            seqs.append(([bos] + ids, ids + [eos]))
     # Optimizer & scheduler
     params = list(model.parameters())
     # Choose between standard AdamW and bitsandbytes 8-bit AdamW
