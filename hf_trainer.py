@@ -46,21 +46,39 @@ logging.basicConfig(
 
 
 def prepare_text_lines(dataset, fields: List[str] | None = None) -> List[str]:
-    """Concatenate *fields* of each HF row into one string.
+    """Vectorised text-line preparation using *datasets.map*.
 
-    If *fields* is *None*, all columns are used in the order returned by the
-    dataset. If a field is missing for a given row the value is skipped.
+    Using the HF datasets `map` method allows parallel preprocessing with
+    **pyarrow** memory-efficient pipelines and avoids Python-level iteration.
+    Returns a plain list of concatenated text lines, identical to the previous
+    implementation.
     """
 
-    lines: List[str] = []
-    for row in dataset:
-        if fields is None:
-            values = [str(v) for v in row.values()]
-        else:
-            values = [str(row.get(f, "")) for f in fields]
-        # drop empty strings so that we do not create double spaces
-        lines.append(" ".join(v for v in values if v))
-    return lines
+    import os
+
+    if fields is None:
+        # When no explicit fields are given we use *all* columns.
+        fields = list(dataset.column_names)
+
+    def _concat(batch):
+        out = []
+        cols = [batch.get(f, []) for f in fields]
+        # zip over rows
+        for cells in zip(*cols):
+            # skip empty strings to avoid double spaces
+            out.append(" ".join(str(c) for c in cells if c))
+        return {"text": out}
+
+    num_proc = max(1, min(os.cpu_count() or 1, 8))
+    mapped = dataset.map(
+        _concat,
+        batched=True,
+        num_proc=num_proc,
+        remove_columns=dataset.column_names,
+        desc=f"Concatenating text fields with {num_proc} workers",
+    )
+
+    return mapped["text"]
 
 
 def train_from_hf_dataset(
