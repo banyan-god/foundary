@@ -19,11 +19,14 @@ Example
         --batch-size 32
 """
 
+
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import List
 
@@ -66,7 +69,12 @@ def train_from_hf_dataset(
 ) -> List[float]:
     """End-to-end training util used by the CLI below."""
 
+    logger = logging.getLogger("hf_trainer")
+    t0 = time.perf_counter()
+
+    logger.info("Downloading/loading dataset '%s' split '%s'", dataset_name, split)
     ds = load_dataset(dataset_name, split=split)
+    logger.info("Dataset ready in %.2fs (%d rows)", time.perf_counter() - t0, len(ds))
     if limit is not None:
         ds = ds.select(range(min(limit, len(ds))))
 
@@ -76,7 +84,9 @@ def train_from_hf_dataset(
     tmpdir_path = Path(tmp_ctx.name) if tmp_ctx else None
 
     # Build list of text lines once.
+    prep_start = time.perf_counter()
     lines = prepare_text_lines(ds, fields)
+    logger.info("Prepared %d text lines in %.2fs", len(lines), time.perf_counter() - prep_start)
 
     if not Config.SP_MODEL_PREFIX:  # will train a new tokenizer
         sp_text_file = tmpdir_path / "sp_text.txt"
@@ -85,6 +95,7 @@ def train_from_hf_dataset(
         Config.SP_MODEL_PREFIX = str(tmpdir_path / "spm_model")
 
     # AR training – reuse *lines* list.
+    train_start = time.perf_counter()
     losses = ar_train(
         lines,
         epochs=epochs,
@@ -144,6 +155,8 @@ def main() -> None:
         label_smoothing=args.label_smoothing,
         use_amp=args.amp,
     )
+
+    logger.info("Training finished in %.2fs", time.perf_counter() - train_start)
 
     for idx, loss in enumerate(losses, start=1):
         print(f"Epoch {idx}/{len(losses)} - avg loss: {loss:.4f}")

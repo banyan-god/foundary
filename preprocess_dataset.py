@@ -26,6 +26,8 @@ import json
 from pathlib import Path
 from typing import List
 
+import logging, time
+
 import os
 
 from datasets import (
@@ -88,9 +90,16 @@ def preprocess_dataset(
     text_fields: List[str],
     output_dir: Path,
 ) -> None:
+    logger = logging.getLogger("preprocess_dataset")
+    t0 = time.perf_counter()
+
+    logger.info("Loading dataset '%s' split '%s'", dataset_name, split)
     ds = load_dataset(dataset_name, split=split)
 
+    logger.info("Dataset loaded in %.2fs (%d rows)", time.perf_counter() - t0, len(ds))
+
     tokenizer = build_tokenizer()
+    logger.info("Tokenizer ready (vocab=%d)", tokenizer.sp.get_piece_size())
 
     features = Features({
         "input_ids": Sequence(Value("int32")),
@@ -99,6 +108,7 @@ def preprocess_dataset(
 
     num_proc = max(1, min(os.cpu_count() or 1, 8))  # sensible default
 
+    map_start = time.perf_counter()
     ds_encoded: Dataset = ds.map(
         lambda batch: encode_batch(batch, tokenizer, text_fields),
         batched=True,
@@ -108,11 +118,15 @@ def preprocess_dataset(
         desc=f"Tokenising with {num_proc} workers",
     )
 
+    logger.info("Tokenisation finished in %.2fs", time.perf_counter() - map_start)
+
     output_dir.mkdir(parents=True, exist_ok=True)
     arrow_path = output_dir / f"{dataset_name.replace('/', '_')}_{split}.arrow"
     meta_path = output_dir / "meta.json"
 
+    save_start = time.perf_counter()
     ds_encoded.save_to_disk(str(arrow_path))
+    logger.info("Saved Arrow to %s (%.2fs)", arrow_path, time.perf_counter() - save_start)
 
     meta = {
         "dataset": dataset_name,

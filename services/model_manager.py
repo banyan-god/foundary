@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import random
+import time
 # bitsandbytes is optional; import lazily when required.
 from config import Config
 from models.transformer_ar import VanillaTransformerDecoderAR
@@ -43,6 +44,7 @@ tokenizer = None
 _example_map = {}
 logger = logging.getLogger("transaction_classifier")
 logger.info(f"Using device: {device}")
+# Set DEBUG to see per-step timing, INFO for epoch timing.
 
 # Opt-in to TF32 on Ampere+ when on CUDA for faster matmul with minimal accuracy hit.
 if device.type == "cuda":
@@ -440,6 +442,8 @@ def ar_train(
         random.shuffle(seqs)
         total_loss = 0.0
         steps = 0
+        epoch_token_count = 0
+        epoch_start = time.perf_counter()
         for i in range(0, len(seqs), batch_size):
             batch = seqs[i:i+batch_size]
             max_len = max(len(inp) for inp, _ in batch)
@@ -450,6 +454,9 @@ def ar_train(
                 tgt_batch.append(tgt + [pad] * pad_count)
             x = torch.tensor(inp_batch, dtype=torch.long, device=device)
             y = torch.tensor(tgt_batch, dtype=torch.long, device=device)
+
+            step_token_count = x.numel()
+            step_start = time.perf_counter()
 
             if use_amp:
                 with torch.autocast("cuda"):
@@ -485,13 +492,36 @@ def ar_train(
                     optimizer.step()
                 if scheduler:
                     scheduler.step()
+
+            # logging
+            step_time = time.perf_counter() - step_start
+            logger.debug(
+                "epoch %d | batch %d/%d | loss %.4f | tokens %d | %.2f tok/s",
+                epoch,
+                steps + 1,
+                (len(seqs) + batch_size - 1) // batch_size,
+                loss.item(),
+                step_token_count,
+                step_token_count / max(step_time, 1e-4),
+            )
+
+            epoch_token_count += step_token_count
             total_loss += loss.item()
             steps += 1
         avg = total_loss / steps if steps else 0.0
         ppl = (torch.exp(torch.tensor(avg))).item() if avg < 20 else float("inf")
-        print(
-            f"Epoch {epoch}/{epochs}: avg loss = {avg:.4f} | ppl = {ppl:.2f}",
-            flush=True,
+        epoch_time = time.perf_counter() - epoch_start
+        tok_per_sec = epoch_token_count / max(epoch_time, 1e-4)
+
+        logger.info(
+            "Epoch %d/%d finished: loss %.4f | ppl %.2f | tokens %d | %.2f tok/s | %.2fs",
+            epoch,
+            epochs,
+            avg,
+            ppl,
+            epoch_token_count,
+            tok_per_sec,
+            epoch_time,
         )
         epoch_losses.append(avg)
     save_all()
