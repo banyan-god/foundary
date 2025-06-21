@@ -399,7 +399,11 @@ def ar_train(
     params = list(model.parameters())
     # Choose between standard AdamW and bitsandbytes 8-bit AdamW
     if params:
-        if Config.USE_8BIT_OPT:
+        use_bnb = Config.USE_8BIT_OPT
+        if use_bnb is None:  # auto-detect
+            use_bnb = _use_cuda
+
+        if use_bnb:
             try:
                 import bitsandbytes as bnb
 
