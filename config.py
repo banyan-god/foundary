@@ -29,7 +29,7 @@ class Config:
     MODEL_DROPOUT = float(os.getenv("MODEL_DROPOUT", "0.1"))
 
     # Use bitsandbytes 8-bit AdamW to save memory (set env USE_8BIT_OPT=1).
-    USE_8BIT_OPT = os.getenv("USE_8BIT_OPT", "0") == "1"
+    USE_8BIT_OPT = os.getenv("USE_8BIT_OPT", "1") == "1"
     # Enable torch.compile (PyTorch 2.x+) for runtime optimisation
     # Disabled by default so unit-tests relying on isinstance checks still pass;
     # enable via env `TORCH_COMPILE=1` in production.
