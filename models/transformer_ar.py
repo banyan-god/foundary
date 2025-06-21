@@ -12,12 +12,22 @@ class VanillaTransformerDecoderAR(nn.Module):
         self.token_embedding = nn.Embedding(vocab_size, d_model)
         self.pos_embedding = nn.Embedding(max_length, d_model)
         self.dropout = nn.Dropout(dropout)
+
+        # PyTorch supports *batch_first* to avoid expensive transposes.
         decoder_layer = nn.TransformerDecoderLayer(
-            d_model=d_model, nhead=nhead, dropout=dropout)
-        self.transformer = nn.TransformerDecoder(decoder_layer,
-                                                num_layers=num_layers)
+            d_model=d_model, nhead=nhead, dropout=dropout, batch_first=True
+        )
+        self.transformer = nn.TransformerDecoder(
+            decoder_layer, num_layers=num_layers
+        )
         self.fc = nn.Linear(d_model, vocab_size)
         self.max_length = max_length
+
+        # Pre-allocate a causal mask the size of *max_length*; we slice at
+        # runtime so we pay the (triu) cost only once.
+        full_mask = self._generate_square_subsequent_mask(max_length)
+        # Boolean mask expected by TransformerDecoderLayer
+        self.register_buffer("_causal_mask", full_mask, persistent=False)
 
     def _generate_square_subsequent_mask(self, sz: int):
         mask = torch.triu(torch.ones(sz, sz), diagonal=1).bool()
@@ -37,12 +47,12 @@ class VanillaTransformerDecoderAR(nn.Module):
         """
         bsz, tgt_len = input_ids.size()
         device = input_ids.device
-        pos_ids = torch.arange(tgt_len, device=device).unsqueeze(0).expand(bsz, -1)
+        pos_ids = torch.arange(tgt_len, device=device)
         x = self.token_embedding(input_ids) + self.pos_embedding(pos_ids)
         x = self.dropout(x)
-        # shape for transformer: (tgt_len, batch_size, d_model)
-        x = x.permute(1, 0, 2)
-        tgt_mask = self._generate_square_subsequent_mask(tgt_len).to(device)
+
+        # Use *batch_first* = (B, T, C) so no permute is needed.
+        tgt_mask = self._causal_mask[:tgt_len, :tgt_len]
         # Decoder-only: for pure causal LM we **do not** want future-token
         # information to leak through encoder-decoder cross-attention.  Passing
         # the *same* sequence as `memory` (as the previous implementation did)
@@ -52,16 +62,17 @@ class VanillaTransformerDecoderAR(nn.Module):
         # cross-attention while keeping the API compatible.
         if memory is None:
             d_model = self.token_embedding.embedding_dim
-            mem = torch.zeros(1, bsz, d_model, device=device)  # (src_len=1, B, d_model)
+            # (B, src_len=1, d_model) for batch_first
+            mem = torch.zeros(bsz, 1, d_model, device=device)
         else:
             mem = memory
+            if mem.ndim == 3:
+                # Convert legacy (src_len, B, d) to (B, src_len, d)
+                if mem.shape[1] == bsz and mem.shape[0] != bsz:
+                    mem = mem.permute(1, 0, 2).contiguous()
         # pass only causal mask to self-attention; ignore memory_mask for simplicity
         x = self.transformer(
-            tgt=x,
-            memory=mem,
-            tgt_mask=tgt_mask,
-            memory_mask=None
+            tgt=x, memory=mem, tgt_mask=tgt_mask, memory_mask=None
         )
-        x = x.permute(1, 0, 2)
         logits = self.fc(x)
         return logits
