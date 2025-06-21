@@ -35,6 +35,15 @@ from datasets import load_dataset
 from config import Config
 from services.model_manager import ar_train
 
+# ---------------------------------------------------------------------------
+# Logging setup – respect Config.LOG_LEVEL / env LOG_LEVEL.
+# ---------------------------------------------------------------------------
+
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    level=getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO),
+)
+
 
 def prepare_text_lines(dataset, fields: List[str] | None = None) -> List[str]:
     """Concatenate *fields* of each HF row into one string.
