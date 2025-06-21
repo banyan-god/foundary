@@ -161,6 +161,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    logger = logging.getLogger("hf_trainer")
+
     # If user supplies --sp-model we bypass tokenizer training.
     if args.sp_model:
         sp_path = Path(args.sp_model)
