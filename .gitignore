@@ -64,3 +64,7 @@ data/
 output.txt
 labels.json
 tokenizer.json
+# Ignore large or test stub model artefacts
+*.safetensors
+spm_dummy_test_qwen.*
+Qwen3-0.6B/
