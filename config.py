@@ -28,6 +28,19 @@ class Config:
     MODEL_MAX_LENGTH = int(os.getenv("MODEL_MAX_LENGTH", "256"))
     MODEL_DROPOUT = float(os.getenv("MODEL_DROPOUT", "0.1"))
 
+    # Which architecture to instantiate in services.model_manager.  Supported
+    # values: "vanilla" (default) or "qwen".  Overwrite via env
+    # `MODEL_TYPE=qwen` in production or during tests.
+    MODEL_TYPE = os.getenv("MODEL_TYPE", "vanilla").lower()
+
+    # Qwen-specific overrides (only used when MODEL_TYPE == "qwen") – kept
+    # intentionally small so that unit-tests can run quickly while still
+    # exercising the architecture.  Adjust via environment variables for
+    # higher-capacity models in real deployments.
+    QWEN_N_KV_GROUPS = int(os.getenv("QWEN_N_KV_GROUPS", "2"))
+    QWEN_QK_NORM = os.getenv("QWEN_QK_NORM", "0") == "1"
+    QWEN_ROPE_BASE = float(os.getenv("QWEN_ROPE_BASE", "10000.0"))
+
     # bitsandbytes 8-bit AdamW flag. If env not set, auto-enable when bnb &
     # CUDA present.
     _env_bnb = os.getenv("USE_8BIT_OPT")

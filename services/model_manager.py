@@ -9,7 +9,17 @@ import random
 import time
 # bitsandbytes is optional; import lazily when required.
 from config import Config
-from models.transformer_ar import VanillaTransformerDecoderAR
+# We dynamically choose which model class to import according to Config.MODEL_TYPE
+from typing import TYPE_CHECKING
+
+from config import Config
+
+# Conditional import to avoid heavy dependencies when not required.  We keep
+# the *names* aligned so type-checkers still know about them.
+if Config.MODEL_TYPE == "qwen":
+    from models.qwen3 import Qwen3Model as _ChosenModel
+else:
+    from models.transformer_ar import VanillaTransformerDecoderAR as _ChosenModel
 from models.tokenizer import SPTokenizer
 from schemas.transaction import (
     InferenceRequest, InferenceResponse,
@@ -88,14 +98,30 @@ def load_all():
     tokenizer = SPTokenizer(sp_model)
     # init or load AR model
     vocab_size = tokenizer.sp.get_piece_size()
-    model = VanillaTransformerDecoderAR(
-        vocab_size=vocab_size,
-        d_model=Config.MODEL_D_MODEL,
-        nhead=Config.MODEL_N_HEAD,
-        num_layers=Config.MODEL_NUM_LAYERS,
-        max_length=Config.MODEL_MAX_LENGTH,
-        dropout=Config.MODEL_DROPOUT,
-    ).to(device)
+    if Config.MODEL_TYPE == "qwen":
+        cfg = {
+            "vocab_size": vocab_size,
+            "context_length": Config.MODEL_MAX_LENGTH,
+            "emb_dim": Config.MODEL_D_MODEL,
+            "n_heads": Config.MODEL_N_HEAD,
+            "n_layers": Config.MODEL_NUM_LAYERS,
+            "hidden_dim": Config.MODEL_D_MODEL * 4,
+            "head_dim": Config.MODEL_D_MODEL // Config.MODEL_N_HEAD,
+            "qk_norm": Config.QWEN_QK_NORM,
+            "n_kv_groups": Config.QWEN_N_KV_GROUPS,
+            "rope_base": Config.QWEN_ROPE_BASE,
+            "dtype": torch.float32,
+        }
+        model = _ChosenModel(cfg).to(device)
+    else:
+        model = _ChosenModel(
+            vocab_size=vocab_size,
+            d_model=Config.MODEL_D_MODEL,
+            nhead=Config.MODEL_N_HEAD,
+            num_layers=Config.MODEL_NUM_LAYERS,
+            max_length=Config.MODEL_MAX_LENGTH,
+            dropout=Config.MODEL_DROPOUT,
+        ).to(device)
 
     # Optional torch.compile for speed (PyTorch 2.x+)
     # Compile only when explicitly enabled **and** running on CUDA to avoid
