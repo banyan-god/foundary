@@ -13,13 +13,21 @@ class VanillaTransformerDecoderAR(nn.Module):
         self.pos_embedding = nn.Embedding(max_length, d_model)
         self.dropout = nn.Dropout(dropout)
 
-        # PyTorch supports *batch_first* to avoid expensive transposes.
-        decoder_layer = nn.TransformerDecoderLayer(
-            d_model=d_model, nhead=nhead, dropout=dropout, batch_first=True
+        # Replace the built-in TransformerDecoder with our own lightweight
+        # implementation so that we are independent from PyTorch's higher-level
+        # Transformer stack (see `models/transformer_custom.py`).
+        from .transformer_custom import (
+            CustomTransformerDecoderLayer,
+            CustomTransformerDecoder,
         )
-        self.transformer = nn.TransformerDecoder(
-            decoder_layer, num_layers=num_layers
+
+        proto_layer = CustomTransformerDecoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=4 * d_model,
+            dropout=dropout,
         )
+        self.transformer = CustomTransformerDecoder(proto_layer, num_layers=num_layers)
         self.fc = nn.Linear(d_model, vocab_size)
         self.max_length = max_length
 
