@@ -171,6 +171,8 @@ def main() -> None:
         Config.SP_MODEL_PREFIX = str(sp_path.with_suffix(''))
         Config.SP_TRAIN_DATA = ""  # disable automatic training in load_all
 
+    train_start = time.perf_counter()
+
     losses = train_from_hf_dataset(
         dataset_name=args.dataset,
         split=args.split,
