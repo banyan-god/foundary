@@ -25,7 +25,7 @@ SAVE_ON_TRAIN = os.getenv("SAVE_MODEL_ON_TRAIN", "0") == "1"
 import time
 # bitsandbytes is optional; import lazily when required.
 from config import Config
-from models.qwen3 import Qwen3Model
+from models.transformer_ar import VanillaTransformerDecoderAR
 from models.tokenizer import SPTokenizer
 from schemas.transaction import (
     InferenceRequest, InferenceResponse,
@@ -104,7 +104,7 @@ def load_all():
     tokenizer = SPTokenizer(sp_model)
     # init or load AR model
     vocab_size = tokenizer.sp.get_piece_size()
-    model = Qwen3Model(
+    model = VanillaTransformerDecoderAR(
         vocab_size=vocab_size,
         d_model=Config.MODEL_D_MODEL,
         nhead=Config.MODEL_N_HEAD,
