@@ -14,7 +14,13 @@ import random
 IGNORE_IDX = -100
 
 # Re‑used optimiser so momentum & Adam moments survive across .train() calls
+
 _optimizer = None
+
+# Persist checkpoints only when this env‑var is set.
+#   export SAVE_MODEL_ON_TRAIN=1   -> save each call
+#   unset  / set to 0             -> no autosave
+SAVE_ON_TRAIN = os.getenv("SAVE_MODEL_ON_TRAIN", "0") == "1"
 
 import time
 # bitsandbytes is optional; import lazily when required.
@@ -312,8 +318,9 @@ def train(request: TrainRequest) -> TrainResponse:
         correct = (preds == target_flat) & mask
         total = mask.sum().item()
         accuracy = correct.sum().item() / total if total > 0 else 0.0
-    # save updated model
-    save_all()
+    # optionally persist
+    if SAVE_ON_TRAIN:
+        save_all()
     return TrainResponse(status="training_complete", loss=loss.item(), accuracy=accuracy)
 
 def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
@@ -350,7 +357,8 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    save_all()
+    if SAVE_ON_TRAIN:
+        save_all()
     return OnlineLearnResponse(status="online_learning_complete", loss=loss.item())
     
 def generate(request: GenerateRequest) -> GenerateResponse:
@@ -593,5 +601,6 @@ def ar_train(
             epoch_time,
         )
         epoch_losses.append(avg)
-    save_all()
+    if SAVE_ON_TRAIN:
+        save_all()
     return epoch_losses

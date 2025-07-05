@@ -44,7 +44,16 @@ import json
 from datasets import load_dataset
 
 from schemas.transaction import Transaction, InferenceRequest, TrainRequest
+
 from services import model_manager as mgr
+
+import os
+
+# Disable per-batch checkpoint saves during HF fine‑tune unless the caller
+# explicitly requests them.  This keeps training fast and only writes one
+# final checkpoint at the end.
+if os.getenv("SAVE_MODEL_ON_TRAIN") is None:
+    os.environ["SAVE_MODEL_ON_TRAIN"] = "0"
 
 
 DELIM = "\n###\n"      # marks start of model completion
@@ -120,6 +129,13 @@ def fine_tune_from_hf_dataset(
             f"Batch {i + 1}/{num_batches} – loss: {resp.loss:.4f}, accuracy: {resp.accuracy:.4f}",
             flush=True,
         )
+
+    # ------------------------------------------------------------------
+    # Persist final model weights exactly once when autosave is disabled.
+    # ------------------------------------------------------------------
+    if os.getenv("SAVE_MODEL_ON_TRAIN", "0") != "1":
+        print("Saving final model checkpoint…", flush=True)
+        mgr.save_all()
 
 
 def main() -> None:
