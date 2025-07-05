@@ -69,7 +69,7 @@ def prepare_text_lines(dataset, fields: List[str] | None = None) -> List[str]:
             out.append(" ".join(str(c) for c in cells if c))
         return {"text": out}
 
-    num_proc = max(1, min(os.cpu_count() or 1, 8))
+    num_proc = max(1, min(os.cpu_count() or 1, 16))
     mapped = dataset.map(
         _concat,
         batched=True,
