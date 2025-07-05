@@ -171,6 +171,14 @@ def prepare_input_json(req_dict: dict) -> str:
     # newline separates history ↔ current transaction blocks
     return "\n".join(parts)
 
+# ---------- Padding‑mask helper ---------------------------------
+def _make_pad_mask(batch_tensor: torch.Tensor, pad_id: int) -> torch.BoolTensor:
+    """
+    Returns BoolTensor [B, T] where **True** marks PAD tokens that should
+    be ignored by attention.
+    """
+    return batch_tensor.eq(pad_id)
+
 def log_input_distribution(requests):
     amounts = []
     for req in requests:
@@ -296,7 +304,8 @@ def train(request: TrainRequest) -> TrainResponse:
     input_tensor = torch.tensor(inp_batch, dtype=torch.long, device=device)
     target_tensor = torch.tensor(tgt_batch, dtype=torch.long, device=device)
     # forward
-    logits = model(input_tensor, memory=None)
+    pad_mask = _make_pad_mask(input_tensor, pad)
+    logits = model(input_tensor, memory=None, key_padding_mask=pad_mask)
     bsz, seq_len, vocab_size = logits.size()
     logits_flat = logits.view(-1, vocab_size)
     target_flat = target_tensor.view(-1)
@@ -344,7 +353,8 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     # tensor
     inp_tensor = torch.tensor([inp_ids], dtype=torch.long, device=device)
     tgt_tensor = torch.tensor([tgt_ids], dtype=torch.long, device=device)
-    logits = model(inp_tensor, memory=None)
+    pad_mask = _make_pad_mask(inp_tensor, pad)
+    logits = model(inp_tensor, memory=None, key_padding_mask=pad_mask)
     vocab_size = logits.size(-1)
     logits_flat = logits.view(-1, vocab_size)
     target_flat = tgt_tensor.view(-1)
@@ -376,12 +386,17 @@ def generate(request: GenerateRequest) -> GenerateResponse:
         if max_len_cap and len(seq_ids) > max_len_cap:
             seq_ids = seq_ids[-max_len_cap:]
         input_ids = torch.tensor([seq_ids], dtype=torch.long, device=device)
+        # cache PAD id so we can ban it during sampling
+        pad_id = tokenizer.sp.pad_id()
         tokens = []
         max_new = request.max_new_tokens or Config.AR_MAX_GENERATE_LENGTH
         with torch.no_grad():
             for _ in range(max_new):
                 logits = model(input_ids)
                 last = logits[0, -1, :]
+                # ── Ban PAD from being selected ─────────────────────────────
+                if pad_id >= 0:                       # pad_id = 3 in default SPM
+                    last[pad_id] = -float("inf")
                 idx = int(torch.argmax(last).item())
                 if idx == tokenizer.sp.eos_id():
                     break
@@ -537,9 +552,11 @@ def ar_train(
 
             if use_amp:
                 with torch.autocast("cuda"):
-                    logits = model(x, memory=None)
+                    pad_mask = _make_pad_mask(x, pad)
+                    logits = model(x, memory=None, key_padding_mask=pad_mask)
             else:
-                logits = model(x, memory=None)
+                pad_mask = _make_pad_mask(x, pad)
+                logits = model(x, memory=None, key_padding_mask=pad_mask)
             bsz, seq_len, vocab_size = logits.size()
             logits_flat = logits.view(-1, vocab_size)
             target_flat = y.view(-1)

@@ -32,6 +32,12 @@ Example
         --category-field category \
         --limit   20000 \
         --batch-size 64
+
+        python hf_finetune.py \
+        --dataset pointe77/credit-card-transaction \
+        --split   train \
+        --category-field category \
+        --batch-size 64
 """
 
 from __future__ import annotations
