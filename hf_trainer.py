@@ -33,7 +33,8 @@ from typing import List
 from datasets import load_dataset
 
 from config import Config
-from services.model_manager import ar_train
+from services import model_manager as mgr  # exposes ar_train + save_all
+ar_train = mgr.ar_train
 
 # ---------------------------------------------------------------------------
 # Logging setup – respect Config.LOG_LEVEL / env LOG_LEVEL.
@@ -191,6 +192,13 @@ def main() -> None:
 
     for idx, loss in enumerate(losses, start=1):
         print(f"Epoch {idx}/{len(losses)} - avg loss: {loss:.4f}")
+
+    # ------------------------------------------------------------------
+    # Persist a single final checkpoint when per-batch saving is off.
+    # ------------------------------------------------------------------
+    if os.getenv("SAVE_MODEL_ON_TRAIN", "0") != "1":
+        logger.info("Saving final model checkpoint …")
+        mgr.save_all()
 
 
 if __name__ == "__main__":
