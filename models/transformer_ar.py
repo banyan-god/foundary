@@ -35,13 +35,18 @@ class VanillaTransformerDecoderAR(nn.Module):
 
     def forward(self,
                 input_ids: torch.LongTensor,
-                memory: torch.Tensor = None,
-                memory_mask: torch.Tensor = None):
+                *,
+                memory: torch.Tensor | None = None,
+                memory_mask: torch.Tensor | None = None,
+                key_padding_mask: torch.Tensor | None = None):
         """
         Args:
-            input_ids: (batch_size, tgt_seq_len)
-            memory: encoder outputs, shape (src_seq_len, batch_size, d_model)
-            memory_mask: optional mask for encoder-decoder attention
+            input_ids: LongTensor of shape (batch_size, tgt_seq_len)
+            memory:    Optional encoder states (batch_size, src_seq_len, d_model)
+            memory_mask: Optional float/bool mask for encoder‑decoder attention
+            key_padding_mask: BoolTensor (batch_size, tgt_seq_len) where **True**
+                              marks PAD positions that should be ignored by
+                              self‑attention.
         Returns:
             logits: (batch_size, tgt_seq_len, vocab_size)
         """
@@ -72,7 +77,11 @@ class VanillaTransformerDecoderAR(nn.Module):
                     mem = mem.permute(1, 0, 2).contiguous()
         # pass only causal mask to self-attention; ignore memory_mask for simplicity
         x = self.transformer(
-            tgt=x, memory=mem, tgt_mask=tgt_mask, memory_mask=None
+            tgt=x,
+            memory=mem,
+            tgt_mask=tgt_mask,
+            memory_mask=None,
+            tgt_key_padding_mask=key_padding_mask,
         )
         logits = self.fc(x)
         return logits
