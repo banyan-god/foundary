@@ -19,7 +19,7 @@ _optimizer = None
 import time
 # bitsandbytes is optional; import lazily when required.
 from config import Config
-from models.transformer_ar import VanillaTransformerDecoderAR
+from models.qwen3 import Qwen3Model
 from models.tokenizer import SPTokenizer
 from schemas.transaction import (
     InferenceRequest, InferenceResponse,
@@ -98,7 +98,7 @@ def load_all():
     tokenizer = SPTokenizer(sp_model)
     # init or load AR model
     vocab_size = tokenizer.sp.get_piece_size()
-    model = VanillaTransformerDecoderAR(
+    model = Qwen3Model(
         vocab_size=vocab_size,
         d_model=Config.MODEL_D_MODEL,
         nhead=Config.MODEL_N_HEAD,

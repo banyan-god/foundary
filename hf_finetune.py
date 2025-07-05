@@ -29,7 +29,6 @@ Example
     python hf_finetune.py \
         --dataset pointe77/credit-card-transaction \
         --split   train \
-        --text-fields description name merchant amount \
         --category-field category \
         --limit   20000 \
         --batch-size 64
@@ -40,6 +39,7 @@ from __future__ import annotations
 import argparse
 import math
 from typing import List
+import json
 
 from datasets import load_dataset
 
@@ -47,7 +47,10 @@ from schemas.transaction import Transaction, InferenceRequest, TrainRequest
 from services import model_manager as mgr
 
 
-def row_to_request(row: dict, text_fields: List[str]) -> InferenceRequest:
+DELIM = "\n###\n"      # marks start of model completion
+
+
+def row_to_request(row: dict) -> InferenceRequest:
     """Convert dataset *row* to an InferenceRequest struct."""
 
     # Assemble current_transaction dict picking the desired fields, falling
@@ -68,7 +71,7 @@ def row_to_request(row: dict, text_fields: List[str]) -> InferenceRequest:
 def fine_tune_from_hf_dataset(
     dataset_name: str,
     split: str = "train",
-    text_fields: List[str] | None = None,
+    text_fields: List[str] | None = None,  # deprecated, kept for argparser compatibility
     category_field: str = "category",
     limit: int | None = None,
     batch_size: int = 32,
@@ -84,8 +87,6 @@ def fine_tune_from_hf_dataset(
     if limit is not None and limit < len(ds):
         ds = ds.select(range(limit))
 
-    text_fields = text_fields or ["description", "name", "merchant", "amount"]
-
     # Convert entire split into requests + labels so that we can easily
     # slice batches afterwards.
     requests: List[InferenceRequest] = []
@@ -95,8 +96,9 @@ def fine_tune_from_hf_dataset(
         if category_field not in row or row[category_field] is None:
             # Skip rows without a category label.
             continue
-        requests.append(row_to_request(row, text_fields))
-        labels.append(str(row[category_field]))
+        requests.append(row_to_request(row))
+        label_json = json.dumps({"category": str(row[category_field])}, ensure_ascii=False)
+        labels.append(DELIM + label_json)
 
     if not requests:
         raise RuntimeError("No training examples with a category label found.")
@@ -125,11 +127,6 @@ def main() -> None:
     parser.add_argument("--dataset", required=True, help="HF dataset identifier e.g. 'pointe77/credit-card-transaction'")
     parser.add_argument("--split", default="train", help="Dataset split to use (default: train)")
     parser.add_argument(
-        "--text-fields",
-        nargs="*",
-        help="Columns describing the transaction (default: description name merchant amount)",
-    )
-    parser.add_argument(
         "--category-field",
         default="category",
         help="Column containing the category label (default: category)",
@@ -142,7 +139,7 @@ def main() -> None:
     fine_tune_from_hf_dataset(
         dataset_name=args.dataset,
         split=args.split,
-        text_fields=args.text_fields,
+        text_fields=None,
         category_field=args.category_field,
         limit=args.limit,
         batch_size=args.batch_size,
