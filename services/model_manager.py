@@ -6,6 +6,16 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import random
+# ---------------------------------------------------------------------------
+# Constants / globals
+# ---------------------------------------------------------------------------
+# Index that the loss function will ignore.  We write this value into *target*
+# padding positions so real <unk> (id 0) tokens are still trained on.
+IGNORE_IDX = -100
+
+# Re‑used optimiser so momentum & Adam moments survive across .train() calls
+_optimizer = None
+
 import time
 # bitsandbytes is optional; import lazily when required.
 from config import Config
@@ -130,11 +140,30 @@ def load_all():
 
 def prepare_input_json(req_dict: dict) -> str:
     parts = []
-    for hist in req_dict.get('user_history', []):
-        parts.append(f"{hist['description']} {hist['name']} {hist['merchant']} {hist['amount']} {hist.get('category', '')}")
-    cur = req_dict['current_transaction']
-    parts.append(f"{cur['description']} {cur['name']} {cur['merchant']} {cur['amount']}")
-    return ' '.join(parts)
+    field_sep = " | "            # explicit separator avoids token ambiguity
+    # historical transactions
+    for hist in req_dict.get("user_history", []):
+        parts.append(
+            field_sep.join(
+                [str(hist.get(k, "")) for k in ("description",
+                                                "name",
+                                                "merchant",
+                                                "amount",
+                                                "category")]
+            )
+        )
+    # current transaction
+    cur = req_dict["current_transaction"]
+    parts.append(
+        field_sep.join(
+            [str(cur.get(k, "")) for k in ("description",
+                                           "name",
+                                           "merchant",
+                                           "amount")]
+        )
+    )
+    # newline separates history ↔ current transaction blocks
+    return "\n".join(parts)
 
 def log_input_distribution(requests):
     amounts = []
@@ -257,7 +286,7 @@ def train(request: TrainRequest) -> TrainResponse:
         pad_count = max_len - len(inp_ids)
         inp_batch.append(inp_ids + [pad] * pad_count)
         # target is same length: pad_count on right
-        tgt_batch.append(tgt_ids + [pad] * pad_count)
+        tgt_batch.append(tgt_ids + [IGNORE_IDX] * pad_count)
     input_tensor = torch.tensor(inp_batch, dtype=torch.long, device=device)
     target_tensor = torch.tensor(tgt_batch, dtype=torch.long, device=device)
     # forward
@@ -265,10 +294,14 @@ def train(request: TrainRequest) -> TrainResponse:
     bsz, seq_len, vocab_size = logits.size()
     logits_flat = logits.view(-1, vocab_size)
     target_flat = target_tensor.view(-1)
-    ignore_idx = pad if pad >= 0 else -100
+    ignore_idx = IGNORE_IDX
     loss = F.cross_entropy(logits_flat, target_flat, ignore_index=ignore_idx)
     # backward and optimize
-    optimizer = optim.Adam(model.parameters(), lr=float(os.getenv('LEARNING_RATE', '1e-3')))
+    global _optimizer
+    if _optimizer is None:
+        _optimizer = optim.Adam(model.parameters(),
+                                lr=float(os.getenv("LEARNING_RATE", "1e-3")))
+    optimizer = _optimizer
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -285,6 +318,7 @@ def train(request: TrainRequest) -> TrainResponse:
 
 def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     # Online AR learning: one-step gradient update on single example
+    global _optimizer
     if model is None or tokenizer is None:
         load_all()
     model.train()
@@ -307,9 +341,12 @@ def online_learn(request: OnlineLearnRequest) -> OnlineLearnResponse:
     vocab_size = logits.size(-1)
     logits_flat = logits.view(-1, vocab_size)
     target_flat = tgt_tensor.view(-1)
-    ignore_idx = pad if pad >= 0 else -100
+    ignore_idx = IGNORE_IDX
     loss = F.cross_entropy(logits_flat, target_flat, ignore_index=ignore_idx)
-    optimizer = optim.Adam(model.parameters(), lr=float(os.getenv('LEARNING_RATE', '1e-3')))
+    if _optimizer is None:
+        _optimizer = optim.Adam(model.parameters(),
+                                lr=float(os.getenv("LEARNING_RATE", "1e-3")))
+    optimizer = _optimizer
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -338,6 +375,8 @@ def generate(request: GenerateRequest) -> GenerateResponse:
                 logits = model(input_ids)
                 last = logits[0, -1, :]
                 idx = int(torch.argmax(last).item())
+                if idx == tokenizer.sp.eos_id():
+                    break
                 tokens.append(idx)
                 # append new token
                 input_ids = torch.cat([input_ids, torch.tensor([[idx]], device=device)], dim=1)
@@ -426,8 +465,8 @@ def ar_train(
     # Choose between standard AdamW and bitsandbytes 8-bit AdamW
     if params:
         use_bnb = Config.USE_8BIT_OPT
-        if use_bnb is None:  # auto-detect
-            use_bnb = _use_cuda
+        if use_bnb is None:              # auto‑detect
+            use_bnb = (device.type == "cuda")
 
         if use_bnb:
             try:
@@ -481,7 +520,7 @@ def ar_train(
             for inp, tgt in batch:
                 pad_count = max_len - len(inp)
                 inp_batch.append(inp + [pad] * pad_count)
-                tgt_batch.append(tgt + [pad] * pad_count)
+                tgt_batch.append(tgt + [IGNORE_IDX] * pad_count)
             x = torch.tensor(inp_batch, dtype=torch.long, device=device)
             y = torch.tensor(tgt_batch, dtype=torch.long, device=device)
 
@@ -499,7 +538,7 @@ def ar_train(
             loss = F.cross_entropy(
                 logits_flat,
                 target_flat,
-                ignore_index=pad,
+                ignore_index=IGNORE_IDX,
                 label_smoothing=label_smoothing,
             )
 
