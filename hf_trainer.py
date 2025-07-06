@@ -124,6 +124,7 @@ def train_from_hf_dataset(
 
     # AR training – reuse *lines* list.
     train_start = time.perf_counter()
+    print(f"Training AR model with {len(lines)} text lines")
     losses = ar_train(
         lines,
         epochs=epochs,

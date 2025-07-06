@@ -472,7 +472,7 @@ def ar_train(
                 tgts.append(ids + [eos])
             return {"inp": inps, "tgt": tgts}
 
-        num_proc = max(1, min(os.cpu_count() or 1, 8))
+        num_proc = max(1, min(os.cpu_count() or 1, 16))
         ds = ds.map(_tok, batched=True, num_proc=num_proc, desc="Tokenising")
         seqs = list(zip(ds["inp"], ds["tgt"]))
     else:
@@ -530,6 +530,8 @@ def ar_train(
     else:
         scaler = None
     epoch_losses = []
+    logger.info(
+        "Starting AR training: epochs=%d, batch_size=%d, lr=%.6");
     for epoch in range(1, epochs + 1):
         random.shuffle(seqs)
         total_loss = 0.0
@@ -566,6 +568,9 @@ def ar_train(
                 ignore_index=IGNORE_IDX,
                 label_smoothing=label_smoothing,
             )
+            if(i% 100 == 0):
+                logger.info("Processing batch %d/%d", i // batch_size + 1, (len(seqs) + batch_size - 1) // batch_size);
+                logger.info("Loss: %.4f", loss.item())
 
             if optimizer:
                 optimizer.zero_grad()
