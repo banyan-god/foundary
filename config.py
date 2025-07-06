@@ -9,7 +9,7 @@ class Config:
     MODEL_VERSION = int(os.getenv("MODEL_VERSION", "1"))
     MAX_BATCH_SIZE = int(os.getenv("MAX_BATCH_SIZE", "32"))
     # SentencePiece settings
-    SP_MODEL_PREFIX = os.getenv("SP_MODEL_PREFIX", "./spm")
+    # SP_MODEL_PREFIX = os.getenv("SP_MODEL_PREFIX", "./spm")
     # Larger vocabulary improves representation capacity; 500 was too small
     # for diverse merchant/description text. Bump default to 4000 while still
     # lightweight. Override via env SP_VOCAB_SIZE if needed.
